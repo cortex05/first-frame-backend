@@ -1,4 +1,4 @@
-
+import app from './src/app.js';
 
 let server = null;
 
