@@ -56,5 +56,5 @@ const CaseSchema = new Schema(
 
 const CaseModel = mongoose.models.Case || mongoose.model('Case', CaseSchema);
 
-export { CaseSchema };
+export { CaseSchema, QuestionSchema };
 export default CaseModel;
