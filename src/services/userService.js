@@ -4,21 +4,33 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import{ createAppError } from "../utils/error.js";
 
-export const register = async (name, email, password, isAdmin) => {
-  const existingUser = await User.findOne({ email });
+export const register = async (username, email, password, isAdmin) => {
+  const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : email;
+
+  if (!username || !normalizedEmail || !password) {
+    throw createAppError("Username, email, and password are required", 400);
+  }
+
+  const existingUser = await User.findOne({ email: normalizedEmail });
   if (existingUser) {
     throw createAppError("User already exists", 400);
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
-  const newUser = await User.create({ name, email, password: hashedPassword, isAdmin });
+  const newUser = await User.create({
+    username,
+    email: normalizedEmail,
+    password: hashedPassword,
+    isAdmin,
+  });
 
   const { password: _, ...userWithoutPassword } = newUser.toObject();
   return userWithoutPassword;
 };
 
 export const login = async (email, password) => {
-  const user = await User.findOne({ email });
+  const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : email;
+  const user = await User.findOne({ email: normalizedEmail });
 
   if (!user) {
     throw createAppError("Invalid email or password", 401);
@@ -34,5 +46,5 @@ export const login = async (email, password) => {
     { expiresIn: process.env.JWT_EXPIRATION }
   );
 
-  return { token, userId: user._id, name: user.name };
+  return { token, userId: user._id, username: user.username };
 }

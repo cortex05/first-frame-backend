@@ -5,17 +5,29 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true,
+    trim: true,
+  },
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    trim: true,
+    lowercase: true,
   },
   password: {
     type: String,
     required: true,
   },
+  isAdmin: {
+    type: Boolean,
+    default: false,
+  },
   favorites: {
-    type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Favorites' }],
+    type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Playlist' }],
     default: [],
   }, 
   cases: {
-    type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Cases' }],
+    type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Case' }],
     default: [],
   }
 }, { timestamps: true});

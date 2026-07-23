@@ -4,6 +4,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 
 import router from "./routes/index.js";
+import authRouter from "./routes/auth.js";
 import errorhandler from "./middleware/errorHandler.js";
 
 const app = express();
@@ -27,6 +28,12 @@ app.use(express.urlencoded({
   extended: true 
 }));
 
+// Use router
 app.use('/api', router);
+// Backward-compatible auth routes for clients not yet using /api prefix.
+app.use('/auth', authRouter);
+
+// Error handling middleware
 app.use(errorhandler);
+
 export default app;

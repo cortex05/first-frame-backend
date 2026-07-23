@@ -4,8 +4,8 @@ import {
 } from "../services/userService.js";
 
 export const register = async (req, res, next) => {
-  const { name, email, password, isAdmin } = req.body;
-  const user = await registerUser(name, email, password, isAdmin);
+  const { username, email, password, isAdmin } = req.body;
+  const user = await registerUser(username, email, password, isAdmin);
 
   res.status(201).json({
     success: true,
@@ -16,7 +16,7 @@ export const register = async (req, res, next) => {
 
 export const login = async (req, res, next) => {
   const { email, password } = req.body;
-  const { token, userId, name } = await loginUser(email, password);
+  const { token, userId, username } = await loginUser(email, password);
 
   res.status(200).json({
     success: true,
@@ -24,7 +24,7 @@ export const login = async (req, res, next) => {
     data: {
       token,
       userId,
-      name
+      username
     }
   })
 }
