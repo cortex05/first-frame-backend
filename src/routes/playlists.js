@@ -6,8 +6,11 @@ import {
   listPlaylists,
   updatePlaylist,
 } from '../controllers/playlistController.js';
+import authenticate from '../middleware/authHandler.js';
 
 const router = express.Router();
+
+router.use(authenticate);
 
 router.get('/', listPlaylists);
 router.get('/:playlistId', getPlaylistById);

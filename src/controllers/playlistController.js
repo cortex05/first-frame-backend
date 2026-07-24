@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import Playlist from '../models/Playlist.js';
+import User from '../models/User.js';
 
 function validateObjectId(value) {
   return mongoose.Types.ObjectId.isValid(value);
@@ -49,7 +50,7 @@ export async function getPlaylistById(req, res, next) {
 export async function createPlaylist(req, res, next) {
   try {
     const { title, questions = [] } = req.body;
-    const userId = req.user.id;
+    const userId = req.user?.id || req.user?._id || req.userId;
 
     if (!validateObjectId(userId)) {
       return res.status(400).json({ message: 'Valid userId is required.' });
@@ -68,6 +69,17 @@ export async function createPlaylist(req, res, next) {
       title: title.trim(),
       questions,
     });
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $addToSet: { favorites: playlist._id } },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      await Playlist.findByIdAndDelete(playlist._id);
+      return res.status(404).json({ message: 'User not found.' });
+    }
 
     return res.status(201).json({ playlist });
   } catch (error) {
