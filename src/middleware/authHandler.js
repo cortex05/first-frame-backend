@@ -21,6 +21,7 @@ const authenticate = async (req, res, next) => {
   if(!user) {
     throw createAppError('User not found', 404);
   }
+  req.userId = decoded.id;
   req.user = user;
   next();
 };

@@ -6,7 +6,7 @@ const { Schema } = mongoose;
 const OptionSchema = new Schema(
   {
     label: { type: String, required: true, trim: true },
-    value: { type: String, required: true, trim: true },
+    value: { type: Number, required: true, trim: true },
   },
   { _id: false }
 );
@@ -34,6 +34,7 @@ const StudentSchema = new Schema(
 
 const CaseSchema = new Schema(
   {
+    owner: { type: Schema.Types.ObjectId, ref: 'User', required: true, immutable: true, index: true },
     name: { type: String, required: true, trim: true },
     author: { type: String, required: true, trim: true },
     crimeType: { type: String, enum: CRIME_TYPES, required: true },
