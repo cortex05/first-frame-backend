@@ -3,6 +3,15 @@ import Case from '../models/Case.js';
 import { CRIME_TYPES } from '../types.js';
 import { createAppError } from '../utils/error.js';
 
+export const listCases = async (ownerId) => {
+  if (!ownerId || !mongoose.Types.ObjectId.isValid(ownerId)) {
+    throw createAppError('Authenticated user is required', 401);
+  }
+
+  const cases = await Case.find({ owner: ownerId }).sort({ dateCreated: -1 });
+  return cases;
+};
+
 export const createCase = async (casePayload, ownerId) => {
   if (!ownerId || !mongoose.Types.ObjectId.isValid(ownerId)) {
     throw createAppError('Authenticated user is required', 401);

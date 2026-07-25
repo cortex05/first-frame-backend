@@ -1,6 +1,22 @@
 import { 
+  listCases as listCasesService,
   createCase as createCaseService, 
   updateCase as updateCaseService } from '../services/caseService.js';
+
+export const listCases = async (req, res, next) => {
+	try {
+		const ownerId = req.user?.id || req.user?._id || req.userId;
+		const cases = await listCasesService(ownerId);
+
+		res.status(200).json({
+			success: true,
+			message: 'Cases retrieved successfully',
+			data: cases,
+		});
+	} catch (error) {
+		next(error);
+	}
+};
 
 export const createCase = async (req, res, next) => {
 	try {
