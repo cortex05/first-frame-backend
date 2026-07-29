@@ -34,14 +34,23 @@ const StudentSchema = new Schema(
 
 const CaseSchema = new Schema(
   {
-    owner: { type: Schema.Types.ObjectId, ref: 'User', required: true, immutable: true, index: true },
-    name: { type: String, required: true, trim: true },
-    author: { type: String, required: true, trim: true },
+    owner: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+      immutable: true,
+      index: true,
+    },
+
+    // renamed fields
+    clientName: { type: String, required: true, trim: true },
+    attorney: { type: String, required: true, trim: true },
+
     crimeType: { type: String, enum: CRIME_TYPES, required: true },
-    location: { type: String, required: true, trim: true },
     studentNumber: { type: Number, required: true, min: 1 },
-    caseDate: { type: Date, required: true },
-    dateCreated: { type: Date, default: Date.now },
+
+    // new backend-managed creation timestamp
+    createdOn: { type: Date, default: Date.now, immutable: true },
 
     students: { type: [StudentSchema], default: [] },
     questions: { type: [QuestionSchema], default: [] },

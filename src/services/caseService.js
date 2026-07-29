@@ -8,7 +8,7 @@ export const listCases = async (ownerId) => {
     throw createAppError('Authenticated user is required', 401);
   }
 
-  const cases = await Case.find({ owner: ownerId }).sort({ dateCreated: -1 });
+  const cases = await Case.find({ owner: ownerId }).sort({ createdOn: -1 });
   return cases;
 };
 
@@ -18,17 +18,15 @@ export const createCase = async (casePayload, ownerId) => {
   }
 
   const {
-    name,
-    author,
+    clientName,
+    attorney,
     crimeType,
-    location,
     studentNumber,
-    caseDate,
     questions = [],
   } = casePayload || {};
 
-  if (!name || !author || !crimeType || !location) {
-    throw createAppError('name, author, crimeType, and location are required', 400);
+  if (!clientName || !attorney || !crimeType) {
+    throw createAppError('clientName, attorney, and crimeType are required', 400);
   }
 
   if (!CRIME_TYPES.includes(crimeType)) {
@@ -40,23 +38,16 @@ export const createCase = async (casePayload, ownerId) => {
     throw createAppError('studentNumber must be an integer greater than 0', 400);
   }
 
-  const parsedCaseDate = caseDate ? new Date(caseDate) : null;
-  if (!parsedCaseDate || Number.isNaN(parsedCaseDate.getTime())) {
-    throw createAppError('caseDate must be a valid ISO date', 400);
-  }
-
   if (!Array.isArray(questions)) {
     throw createAppError('questions must be an array', 400);
   }
 
   const createdCase = await Case.create({
     owner: ownerId,
-    name: String(name).trim(),
-    author: String(author).trim(),
+    clientName: String(clientName).trim(),
+    attorney: String(attorney).trim(),
     crimeType,
-    location: String(location).trim(),
     studentNumber: parsedStudentNumber,
-    caseDate: parsedCaseDate,
     questions,
   });
 
@@ -73,12 +64,10 @@ export const updateCase = async (caseId, casePayload, ownerId) => {
   }
 
   const allowedFields = [
-    'name',
-    'author',
+    'clientName',
+    'attorney',
     'crimeType',
-    'location',
     'studentNumber',
-    'caseDate',
     'students',
     'questions',
     'chartData',
@@ -98,29 +87,22 @@ export const updateCase = async (caseId, casePayload, ownerId) => {
     throw createAppError('No updatable fields provided', 400);
   }
 
-  if (update.name !== undefined) {
-    if (typeof update.name !== 'string' || !update.name.trim()) {
-      throw createAppError('name must be a non-empty string', 400);
+  if (update.clientName !== undefined) {
+    if (typeof update.clientName !== 'string' || !update.clientName.trim()) {
+      throw createAppError('clientName must be a non-empty string', 400);
     }
-    update.name = update.name.trim();
+    update.clientName = update.clientName.trim();
   }
 
-  if (update.author !== undefined) {
-    if (typeof update.author !== 'string' || !update.author.trim()) {
-      throw createAppError('author must be a non-empty string', 400);
+  if (update.attorney !== undefined) {
+    if (typeof update.attorney !== 'string' || !update.attorney.trim()) {
+      throw createAppError('attorney must be a non-empty string', 400);
     }
-    update.author = update.author.trim();
+    update.attorney = update.attorney.trim();
   }
 
   if (update.crimeType !== undefined && !CRIME_TYPES.includes(update.crimeType)) {
     throw createAppError('Invalid crimeType', 400);
-  }
-
-  if (update.location !== undefined) {
-    if (typeof update.location !== 'string' || !update.location.trim()) {
-      throw createAppError('location must be a non-empty string', 400);
-    }
-    update.location = update.location.trim();
   }
 
   if (update.studentNumber !== undefined) {
@@ -129,14 +111,6 @@ export const updateCase = async (caseId, casePayload, ownerId) => {
       throw createAppError('studentNumber must be an integer greater than 0', 400);
     }
     update.studentNumber = parsedStudentNumber;
-  }
-
-  if (update.caseDate !== undefined) {
-    const parsedCaseDate = update.caseDate ? new Date(update.caseDate) : null;
-    if (!parsedCaseDate || Number.isNaN(parsedCaseDate.getTime())) {
-      throw createAppError('caseDate must be a valid ISO date', 400);
-    }
-    update.caseDate = parsedCaseDate;
   }
 
   if (update.students !== undefined && !Array.isArray(update.students)) {
