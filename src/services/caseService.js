@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import Case from '../models/Case.js';
-import { CRIME_TYPES } from '../types.js';
+import { CASE_TYPES, CHARGES_BY_CASE_TYPE } from '../types.js';
 import { createAppError } from '../utils/error.js';
 
 export const listCases = async (ownerId) => {
@@ -20,17 +20,25 @@ export const createCase = async (casePayload, ownerId) => {
   const {
     clientName,
     attorney,
-    crimeType,
+    caseType,
+    charge,
     studentNumber,
     questions = [],
   } = casePayload || {};
 
-  if (!clientName || !attorney || !crimeType) {
-    throw createAppError('clientName, attorney, and crimeType are required', 400);
+  if (!clientName || !attorney || !caseType || !charge) {
+    throw createAppError('clientName, attorney, caseType, and charge are required', 400);
   }
 
-  if (!CRIME_TYPES.includes(crimeType)) {
-    throw createAppError('Invalid crimeType', 400);
+  const normalizedCaseType = String(caseType).trim().toLowerCase();
+  if (!CASE_TYPES.includes(normalizedCaseType)) {
+    throw createAppError('Invalid caseType', 400);
+  }
+
+  const normalizedCharge = String(charge).trim();
+  const allowedCharges = CHARGES_BY_CASE_TYPE[normalizedCaseType] || [];
+  if (!allowedCharges.includes(normalizedCharge)) {
+    throw createAppError('Invalid charge for selected caseType', 400);
   }
 
   const parsedStudentNumber = Number(studentNumber);
@@ -46,7 +54,8 @@ export const createCase = async (casePayload, ownerId) => {
     owner: ownerId,
     clientName: String(clientName).trim(),
     attorney: String(attorney).trim(),
-    crimeType,
+    caseType: normalizedCaseType,
+    charge: normalizedCharge,
     studentNumber: parsedStudentNumber,
     questions,
   });
@@ -66,7 +75,8 @@ export const updateCase = async (caseId, casePayload, ownerId) => {
   const allowedFields = [
     'clientName',
     'attorney',
-    'crimeType',
+    'caseType',
+    'charge',
     'studentNumber',
     'students',
     'questions',
@@ -101,8 +111,23 @@ export const updateCase = async (caseId, casePayload, ownerId) => {
     update.attorney = update.attorney.trim();
   }
 
-  if (update.crimeType !== undefined && !CRIME_TYPES.includes(update.crimeType)) {
-    throw createAppError('Invalid crimeType', 400);
+  if (update.caseType !== undefined) {
+    if (typeof update.caseType !== 'string' || !update.caseType.trim()) {
+      throw createAppError('caseType must be a non-empty string', 400);
+    }
+
+    update.caseType = update.caseType.trim().toLowerCase();
+    if (!CASE_TYPES.includes(update.caseType)) {
+      throw createAppError('Invalid caseType', 400);
+    }
+  }
+
+  if (update.charge !== undefined) {
+    if (typeof update.charge !== 'string' || !update.charge.trim()) {
+      throw createAppError('charge must be a non-empty string', 400);
+    }
+
+    update.charge = update.charge.trim();
   }
 
   if (update.studentNumber !== undefined) {
@@ -119,6 +144,22 @@ export const updateCase = async (caseId, casePayload, ownerId) => {
 
   if (update.questions !== undefined && !Array.isArray(update.questions)) {
     throw createAppError('questions must be an array', 400);
+  }
+
+  if (update.caseType !== undefined || update.charge !== undefined) {
+    const currentCase = await Case.findOne({ _id: caseId, owner: ownerId }).select('caseType charge');
+
+    if (!currentCase) {
+      throw createAppError('Case not found', 404);
+    }
+
+    const resolvedCaseType = update.caseType ?? currentCase.caseType;
+    const resolvedCharge = update.charge ?? currentCase.charge;
+    const allowedCharges = CHARGES_BY_CASE_TYPE[resolvedCaseType] || [];
+
+    if (!allowedCharges.includes(resolvedCharge)) {
+      throw createAppError('Invalid charge for selected caseType', 400);
+    }
   }
 
   const updatedCase = await Case.findOneAndUpdate(

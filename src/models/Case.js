@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { CRIME_TYPES, QUESTION_TYPES } from '../types.js';
+import { QUESTION_TYPES, CASE_TYPES, CHARGES_BY_CASE_TYPE } from '../types.js';
 
 const { Schema } = mongoose;
 
@@ -41,15 +41,31 @@ const CaseSchema = new Schema(
       immutable: true,
       index: true,
     },
-
-    // renamed fields
     clientName: { type: String, required: true, trim: true },
     attorney: { type: String, required: true, trim: true },
 
-    crimeType: { type: String, enum: CRIME_TYPES, required: true },
-    studentNumber: { type: Number, required: true, min: 1 },
+    // Replaces crimeType
+    caseType: {
+      type: String,
+      enum: CASE_TYPES,
+      required: true,
+      trim: true,
+      lowercase: true,
+    },
+    charge: {
+      type: String,
+      required: true,
+      trim: true,
+      validate: {
+        validator: function (value) {
+          const allowedCharges = CHARGES_BY_CASE_TYPE[this.caseType] || [];
+          return allowedCharges.includes(value);
+        },
+        message: 'Charge is not valid for the selected caseType.',
+      },
+    },
 
-    // new backend-managed creation timestamp
+    studentNumber: { type: Number, required: true, min: 1 },
     createdOn: { type: Date, default: Date.now, immutable: true },
 
     students: { type: [StudentSchema], default: [] },
