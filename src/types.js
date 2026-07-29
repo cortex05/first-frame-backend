@@ -7,12 +7,13 @@ export const CASE_TYPES = [
   'probate',
   'juvenile',
   'traffic',
-  'business_commercial',
+  'business/commercial',
   'employment',
   'property',
   'tax',
   'bankruptcy',
 ];
+
 export const CHARGES_BY_CASE_TYPE = {
   criminal: ['Assault', 'Battery', 'Murder', 'Theft', 'Burglary', 'Robbery', 'Arson', 'Fraud', 'Drug Possession', 'DWI', 'Domestic Violence', 'Kidnapping', 'Weapons Charges', 'Hit and Run'],
   civil: ['Personal Injury', 'Breach of contract', 'Property Damage', 'Medical Malpractice', 'Weapons Charges'],
@@ -20,7 +21,7 @@ export const CHARGES_BY_CASE_TYPE = {
   probate: ['Will Contests', 'Estate Administration', 'Trust Disputes'],
   juvenile: ['Juvenile Delinquency', 'Child in Need of Services', 'Juvenile Assault'],
   traffic: ['Speeding', 'Reckless Driving', 'Driving Without Insurance', 'DWI/DUI', 'Traffic Violations'],
-  business_commercial: ['Partnership Disputes', 'Intellectual Property', 'Shareholder litigation', 'Regulatory Compliance', 'Unfair Competition'],
+  'business/commercial': ['Partnership Disputes', 'Intellectual Property', 'Shareholder litigation', 'Regulatory Compliance', 'Unfair Competition'],
   employment: ['Wrongful Termination', 'Workplace Discrimination', 'Workplace Harassment', 'Wage and Hour Disputes'],
   property: ['Eviction', 'Boundary Disputes', 'Eminent Domain', 'Quiet Title'],
   tax: ['Tax Evasion', 'Tax Fraud', 'IRS Audits', 'Tax Appeals'],
