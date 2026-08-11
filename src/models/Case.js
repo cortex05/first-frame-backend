@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
-import { QUESTION_TYPES, CASE_TYPES, CHARGES_BY_CASE_TYPE } from '../types.js';
+import { QUESTION_TYPES } from '../types.js';
+import { CASE_CATEGORY_IDS } from '../caseCategories.js';
 
 const { Schema } = mongoose;
 
@@ -44,25 +45,13 @@ const CaseSchema = new Schema(
     clientName: { type: String, required: true, trim: true },
     attorney: { type: String, required: true, trim: true },
 
-    // Replaces crimeType
-    caseType: {
+    // Replaces the caseType/charge pair. One id encodes both, so an invalid
+    // combination cannot be stored and no cross-field validation is needed.
+    category: {
       type: String,
-      enum: CASE_TYPES,
+      enum: CASE_CATEGORY_IDS,
       required: true,
       trim: true,
-      lowercase: true,
-    },
-    charge: {
-      type: String,
-      required: true,
-      trim: true,
-      validate: {
-        validator: function (value) {
-          const allowedCharges = CHARGES_BY_CASE_TYPE[this.caseType] || [];
-          return allowedCharges.includes(value);
-        },
-        message: 'Charge is not valid for the selected caseType.',
-      },
     },
 
     studentNumber: { type: Number, required: true, min: 1 },
