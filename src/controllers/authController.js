@@ -17,7 +17,7 @@ export const register = async (req, res, next) => {
 
 export const login = async (req, res, next) => {
   const { email, password } = req.body;
-  const { token, userId, username } = await loginUser(email, password);
+  const { token, userId, username, isAdmin } = await loginUser(email, password);
 
   res.status(200).json({
     success: true,
@@ -25,7 +25,8 @@ export const login = async (req, res, next) => {
     data: {
       token,
       userId,
-      username
+      username,
+      isAdmin
     }
   })
 }

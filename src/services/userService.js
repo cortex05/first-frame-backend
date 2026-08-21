@@ -51,5 +51,7 @@ export const login = async (email, password) => {
     { expiresIn: process.env.JWT_EXPIRATION }
   );
 
-  return { token, userId: user._id, username: user.username };
+  // isAdmin is returned so the client can show or hide admin-only UI. It is not
+  // what authorizes anything -- requireAdmin reads the freshly loaded user.
+  return { token, userId: user._id, username: user.username, isAdmin: user.isAdmin };
 }
