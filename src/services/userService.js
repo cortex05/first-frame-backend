@@ -4,7 +4,13 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import{ createAppError } from "../utils/error.js";
 
-export const register = async (username, email, password, isAdmin) => {
+/**
+ * Registers a normal user. Admin rights are never granted over HTTP -- the
+ * schema default of false stands, and `scripts/grantAdmin.js` is the only way
+ * to flip it. Accepting isAdmin here would let anyone self-promote by posting
+ * one extra field.
+ */
+export const register = async (username, email, password) => {
   const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : email;
 
   if (!username || !normalizedEmail || !password) {
@@ -21,7 +27,6 @@ export const register = async (username, email, password, isAdmin) => {
     username,
     email: normalizedEmail,
     password: hashedPassword,
-    isAdmin,
   });
 
   const { password: _, ...userWithoutPassword } = newUser.toObject();

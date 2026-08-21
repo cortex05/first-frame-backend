@@ -4,8 +4,9 @@ import {
 } from "../services/userService.js";
 
 export const register = async (req, res, next) => {
-  const { username, email, password, isAdmin } = req.body;
-  const user = await registerUser(username, email, password, isAdmin);
+  // isAdmin is deliberately not read from the body -- see userService.register.
+  const { username, email, password } = req.body;
+  const user = await registerUser(username, email, password);
 
   res.status(201).json({
     success: true,
