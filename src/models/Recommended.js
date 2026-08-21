@@ -1,5 +1,8 @@
 import mongoose from 'mongoose';
 import { QuestionSchema } from './Case.js';
+// Side-effect import: registers the User model so populate('createdBy') resolves
+// wherever Recommended is used, not just where auth happens to have loaded it.
+import './User.js';
 import { CASE_CHARGES } from '../charges.js';
 
 /**

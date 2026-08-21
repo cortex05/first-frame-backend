@@ -45,8 +45,12 @@ const chargeFromLookup = ({ charge, category } = {}) => {
  */
 export const listRecommended = async () =>
   // Questions are excluded here for the same reason the playlist list excludes
-  // them: a browse view only needs the headings.
-  Recommended.find({}).select(LIST_FIELDS).sort({ charge: 1 });
+  // them: a browse view only needs the headings. createdBy is populated so the
+  // client can show who authored a set without a second request.
+  Recommended.find({})
+    .select(LIST_FIELDS)
+    .populate('createdBy', 'username')
+    .sort({ charge: 1 });
 
 /**
  * The single set covering a charge, or null. A charge with nothing curated yet
@@ -55,13 +59,17 @@ export const listRecommended = async () =>
 export const findRecommendedForCharge = async (lookup) => {
   const charge = chargeFromLookup(lookup);
 
-  return Recommended.findOne({ charge }).select(DETAIL_FIELDS);
+  return Recommended.findOne({ charge })
+    .select(DETAIL_FIELDS)
+    .populate('createdBy', 'username');
 };
 
 export const getRecommendedById = async (recommendedId) => {
   assertValidId(recommendedId, 'recommended id');
 
-  const recommended = await Recommended.findById(recommendedId).select(DETAIL_FIELDS);
+  const recommended = await Recommended.findById(recommendedId)
+    .select(DETAIL_FIELDS)
+    .populate('createdBy', 'username');
 
   if (!recommended) {
     throw createAppError('Recommended not found', 404);

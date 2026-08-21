@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import Recommended from '../../src/models/Recommended.js';
+import User from '../../src/models/User.js';
 import {
 	createRecommended,
 	deleteRecommended,
@@ -156,6 +157,20 @@ describe('recommendedService.getRecommendedById', () => {
 
 		expect(found.charge).toBe('Arson');
 		expect(found.questions).toHaveLength(1);
+	});
+
+	it('populates the author username so the client can show who wrote it', async () => {
+		const author = await User.create({
+			username: 'admin-jo',
+			email: 'admin-jo@example.com',
+			password: 'hashed',
+			isAdmin: true,
+		});
+
+		const created = await createRecommended({ charge: 'Arson' }, author._id.toString());
+		const found = await getRecommendedById(created._id.toString());
+
+		expect(found.createdBy.username).toBe('admin-jo');
 	});
 
 	it('rejects a malformed id', async () => {
