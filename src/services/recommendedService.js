@@ -99,11 +99,16 @@ export const createRecommended = async (payload, createdBy) => {
   }
 
   try {
-    return await Recommended.create({
+    const created = await Recommended.create({
       createdBy,
       charge: resolvedCharge,
       questions,
     });
+
+    // Populated so the create response matches every other path that returns a
+    // recommended set. A client that keeps this response then holds the same
+    // shape it would get from a read.
+    return await created.populate('createdBy', 'username');
   } catch (error) {
     if (error?.code === 11000) {
       throw createAppError('A recommended set for this charge already exists', 409);
@@ -154,7 +159,12 @@ export const updateRecommended = async (recommendedId, payload) => {
       recommendedId,
       { $set: update },
       { new: true, runValidators: true }
-    ).select(DETAIL_FIELDS);
+    )
+      .select(DETAIL_FIELDS)
+      // Populated here for the same reason the reads populate: every path that
+      // hands back a recommended set returns the same shape, so a client that
+      // stores the response does not lose the author on save.
+      .populate('createdBy', 'username');
   } catch (error) {
     if (error?.code === 11000) {
       throw createAppError('A recommended set for this charge already exists', 409);

@@ -24,23 +24,31 @@ describe('recommendedService.createRecommended', () => {
 		await Recommended.deleteMany({});
 	});
 
-	it('creates a recommended set for a catalog charge', async () => {
-		const createdBy = adminId();
+	it('creates a recommended set for a catalog charge, attributed to its author', async () => {
+		const author = await User.create({
+			username: 'admin-al',
+			email: 'admin-al@example.com',
+			password: 'hashed',
+			isAdmin: true,
+		});
 
 		const created = await createRecommended(
 			{
 				charge: 'Assault',
 				questions: [{ id: 'q-1', text: 'Was there intent?', type: 'TRUE_FALSE' }],
 			},
-			createdBy
+			author._id.toString()
 		);
 
-		expect(created.createdBy.toString()).toBe(createdBy);
+		// Populated, like every read path, so the response is usable as-is.
+		expect(created.createdBy.username).toBe('admin-al');
 		expect(created.charge).toBe('Assault');
 		expect(created.questions).toHaveLength(1);
 
 		const inDb = await Recommended.findById(created._id).lean();
 		expect(inDb.charge).toBe('Assault');
+		// Stored as the reference, not the populated copy.
+		expect(inDb.createdBy.toString()).toBe(author._id.toString());
 	});
 
 	it('normalizes a loosely spelled charge onto its catalog value', async () => {
@@ -202,6 +210,23 @@ describe('recommendedService.updateRecommended', () => {
 
 		expect(updated.charge).toBe('Robbery');
 		expect(updated.questions).toHaveLength(1);
+	});
+
+	it('returns the author populated, so a saved response can replace client state', async () => {
+		const author = await User.create({
+			username: 'admin-mo',
+			email: 'admin-mo@example.com',
+			password: 'hashed',
+			isAdmin: true,
+		});
+
+		const created = await createRecommended({ charge: 'Burglary' }, author._id.toString());
+
+		const updated = await updateRecommended(created._id.toString(), {
+			questions: [{ id: 'q-1', text: 'Force used?', type: 'TRUE_FALSE' }],
+		});
+
+		expect(updated.createdBy.username).toBe('admin-mo');
 	});
 
 	it('rejects a charge outside the catalog', async () => {
