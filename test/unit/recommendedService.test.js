@@ -30,6 +30,7 @@ describe('recommendedService.createRecommended', () => {
 			email: 'admin-al@example.com',
 			password: 'hashed',
 			isAdmin: true,
+			account: new mongoose.Types.ObjectId(),
 		});
 
 		const created = await createRecommended(
@@ -108,6 +109,14 @@ describe('recommendedService.listRecommended', () => {
 		// Browse view omits the question bodies.
 		expect(all[0].questions).toBeUndefined();
 	});
+
+	it('still lists sets whose author no longer exists, with a null author', async () => {
+		// adminId() points at no user -- the same state as after the accounts reset.
+		const all = await listRecommended();
+
+		expect(all).toHaveLength(2);
+		expect(all.every((item) => item.createdBy === null)).toBe(true);
+	});
 });
 
 describe('recommendedService.findRecommendedForCharge', () => {
@@ -173,6 +182,7 @@ describe('recommendedService.getRecommendedById', () => {
 			email: 'admin-jo@example.com',
 			password: 'hashed',
 			isAdmin: true,
+			account: new mongoose.Types.ObjectId(),
 		});
 
 		const created = await createRecommended({ charge: 'Arson' }, author._id.toString());
@@ -218,6 +228,7 @@ describe('recommendedService.updateRecommended', () => {
 			email: 'admin-mo@example.com',
 			password: 'hashed',
 			isAdmin: true,
+			account: new mongoose.Types.ObjectId(),
 		});
 
 		const created = await createRecommended({ charge: 'Burglary' }, author._id.toString());

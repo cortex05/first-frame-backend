@@ -1,21 +1,24 @@
-import mongoose from 'mongoose';
 import Case from '../models/Case.js';
 import { isCaseCategoryId } from '../caseCategories.js';
+import {
+  assertAccountAdmin,
+  assertValidObjectId,
+  caseScopeFilter,
+} from '../policies/accountScope.js';
 import { createAppError } from '../utils/error.js';
+import { assertActiveAccountUsers } from './accountUsers.js';
 
-export const listCases = async (ownerId) => {
-  if (!ownerId || !mongoose.Types.ObjectId.isValid(ownerId)) {
-    throw createAppError('Authenticated user is required', 401);
-  }
-
-  const cases = await Case.find({ owner: ownerId }).sort({ createdOn: -1 });
+export const listCases = async (auth) => {
+  const cases = await Case.find(caseScopeFilter(auth)).sort({ createdOn: -1 });
   return cases;
 };
 
-export const createCase = async (casePayload, ownerId) => {
-  if (!ownerId || !mongoose.Types.ObjectId.isValid(ownerId)) {
-    throw createAppError('Authenticated user is required', 401);
-  }
+/**
+ * Only account admins create cases. `account` and `createdBy` come from the
+ * caller; `owners` are the users the admin hands the case to.
+ */
+export const createCase = async (casePayload, auth) => {
+  assertAccountAdmin(auth);
 
   const {
     clientName,
@@ -23,6 +26,7 @@ export const createCase = async (casePayload, ownerId) => {
     category,
     studentNumber,
     questions = [],
+    owners = [],
   } = casePayload || {};
 
   if (!clientName || !attorney || !category) {
@@ -43,8 +47,12 @@ export const createCase = async (casePayload, ownerId) => {
     throw createAppError('questions must be an array', 400);
   }
 
+  const validatedOwners = await assertActiveAccountUsers(auth.accountId, owners);
+
   const createdCase = await Case.create({
-    owner: ownerId,
+    account: auth.accountId,
+    createdBy: auth.userId,
+    owners: validatedOwners,
     clientName: String(clientName).trim(),
     attorney: String(attorney).trim(),
     category: normalizedCategory,
@@ -55,15 +63,11 @@ export const createCase = async (casePayload, ownerId) => {
   return createdCase;
 };
 
-export const updateCase = async (caseId, casePayload, ownerId) => {
-  if (!ownerId || !mongoose.Types.ObjectId.isValid(ownerId)) {
-    throw createAppError('Authenticated user is required', 401);
-  }
+export const updateCase = async (caseId, casePayload, auth) => {
+  assertValidObjectId(caseId, 'case id');
 
-  if (!caseId || !mongoose.Types.ObjectId.isValid(caseId)) {
-    throw createAppError('Valid case id is required', 400);
-  }
-
+  // This whitelist is what keeps account, createdBy and owners out of reach of
+  // a regular update. Owners change only through setCaseOwners (admin only).
   const allowedFields = [
     'clientName',
     'attorney',
@@ -130,9 +134,29 @@ export const updateCase = async (caseId, casePayload, ownerId) => {
   }
 
   const updatedCase = await Case.findOneAndUpdate(
-    { _id: caseId, owner: ownerId },
+    { _id: caseId, ...caseScopeFilter(auth) },
     { $set: update },
-    { new: true, runValidators: true }
+    { returnDocument: 'after', runValidators: true }
+  );
+
+  if (!updatedCase) {
+    throw createAppError('Case not found', 404);
+  }
+
+  return updatedCase;
+};
+
+/** Replaces the owner list. Account admins only. */
+export const setCaseOwners = async (caseId, owners, auth) => {
+  assertAccountAdmin(auth);
+  assertValidObjectId(caseId, 'case id');
+
+  const validatedOwners = await assertActiveAccountUsers(auth.accountId, owners);
+
+  const updatedCase = await Case.findOneAndUpdate(
+    { _id: caseId, account: auth.accountId },
+    { $set: { owners: validatedOwners } },
+    { returnDocument: 'after', runValidators: true }
   );
 
   if (!updatedCase) {

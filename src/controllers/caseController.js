@@ -1,12 +1,13 @@
-import { 
+import {
   listCases as listCasesService,
-  createCase as createCaseService, 
-  updateCase as updateCaseService } from '../services/caseService.js';
+  createCase as createCaseService,
+  updateCase as updateCaseService,
+  setCaseOwners as setCaseOwnersService } from '../services/caseService.js';
+import { archiveCase as archiveCaseService } from '../services/archiveService.js';
 
 export const listCases = async (req, res, next) => {
 	try {
-		const ownerId = req.user?.id || req.user?._id || req.userId;
-		const cases = await listCasesService(ownerId);
+		const cases = await listCasesService(req.auth);
 
 		res.status(200).json({
 			success: true,
@@ -20,8 +21,7 @@ export const listCases = async (req, res, next) => {
 
 export const createCase = async (req, res, next) => {
 	try {
-		const ownerId = req.user?.id || req.user?._id || req.userId;
-		const createdCase = await createCaseService(req.body, ownerId);
+		const createdCase = await createCaseService(req.body, req.auth);
 
 		res.status(201).json({
 			success: true,
@@ -35,13 +35,40 @@ export const createCase = async (req, res, next) => {
 
 export const updateCase = async (req, res, next) => {
 	try {
-		const ownerId = req.user?.id || req.user?._id || req.userId;
-		const updatedCase = await updateCaseService(req.params.id, req.body, ownerId);
+		const updatedCase = await updateCaseService(req.params.id, req.body, req.auth);
 
 		res.status(200).json({
 			success: true,
 			message: 'Case updated successfully',
 			data: updatedCase,
+		});
+	} catch (error) {
+		next(error);
+	}
+};
+
+export const setCaseOwners = async (req, res, next) => {
+	try {
+		const updatedCase = await setCaseOwnersService(req.params.id, req.body?.owners, req.auth);
+
+		res.status(200).json({
+			success: true,
+			message: 'Case owners updated successfully',
+			data: updatedCase,
+		});
+	} catch (error) {
+		next(error);
+	}
+};
+
+export const archiveCase = async (req, res, next) => {
+	try {
+		const archivedCase = await archiveCaseService(req.params.id, req.auth);
+
+		res.status(201).json({
+			success: true,
+			message: 'Case archived successfully',
+			data: archivedCase,
 		});
 	} catch (error) {
 		next(error);

@@ -9,7 +9,9 @@
     "start": "node main.js",
     "dev": "nodemon main.js",
     "migrate:case-category": "node scripts/migrateCaseCategory.js",
-    "admin:grant": "node scripts/grantAdmin.js"
+    "admin:grant": "node scripts/grantAdmin.js",
+    "test:http": "vitest run test/http",
+    "reset:accounts": "node scripts/resetForAccounts.js"
   },
   "type": "module",
   "author": "Daniel",

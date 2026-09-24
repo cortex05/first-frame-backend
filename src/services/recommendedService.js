@@ -46,7 +46,9 @@ const chargeFromLookup = ({ charge, category } = {}) => {
 export const listRecommended = async () =>
   // Questions are excluded here for the same reason the playlist list excludes
   // them: a browse view only needs the headings. createdBy is populated so the
-  // client can show who authored a set without a second request.
+  // client can show who authored a set without a second request. It populates
+  // to null when the author no longer exists (e.g. after the accounts reset),
+  // so clients must treat the author as optional.
   Recommended.find({})
     .select(LIST_FIELDS)
     .populate('createdBy', 'username')
