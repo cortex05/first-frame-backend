@@ -80,7 +80,25 @@ describe('accounts end to end', () => {
 		const answered = await request(app)
 			.put(`/api/cases/${caseId}`)
 			.set(bearer(memberToken))
-			.send({ answers: { 'q-1': { s1: { label: 'true' } }, 'q-2': { s2: { label: 'false' } } } });
+			.send({
+				// Seated the way StartScreen stores it: student numbers as ids, and
+				// answers keyed by those numbers. The archive report reads both.
+				chartData: {
+					rects: [
+						{
+							id: 'rect-1',
+							assignedStudents: [
+								{ id: 1, xRel: 0, yRel: 0 },
+								{ id: 2, xRel: 40, yRel: 0 },
+							],
+						},
+					],
+				},
+				answers: {
+					'q-1': { 1: { label: 'true', value: 5 } },
+					'q-2': { 2: { label: 'false', value: 0 } },
+				},
+			});
 		expect(answered.status).toBe(200);
 
 		// 6. The member archives it; it leaves the live list and enters the archive.
@@ -99,6 +117,10 @@ describe('accounts end to end', () => {
 
 		const detail = await request(app).get(`/api/archived-cases/${archivedId}`).set(bearer(memberToken));
 		expect(detail.status).toBe(200);
-		expect(detail.body.data.answers['q-2']).toEqual({ s2: { label: 'false' } });
+		expect(detail.body.data.answers['q-2']).toEqual({ 2: { label: 'false', value: 0 } });
+		// The archive report (spec 002) builds its student list from the seating
+		// chart, so the snapshot must keep it intact.
+		expect(detail.body.data.chartData.rects[0].assignedStudents.map((s) => s.id)).toEqual([1, 2]);
+		expect(detail.body.data.answers['q-1']['1']).toEqual({ label: 'true', value: 5 });
 	});
 });
