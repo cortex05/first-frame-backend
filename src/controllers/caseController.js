@@ -4,6 +4,7 @@ import {
   updateCase as updateCaseService,
   setCaseOwners as setCaseOwnersService } from '../services/caseService.js';
 import { archiveCase as archiveCaseService } from '../services/archiveService.js';
+import { markSessionStarted } from '../services/transactionService.js';
 
 export const listCases = async (req, res, next) => {
 	try {
@@ -69,6 +70,20 @@ export const archiveCase = async (req, res, next) => {
 			success: true,
 			message: 'Case archived successfully',
 			data: archivedCase,
+		});
+	} catch (error) {
+		next(error);
+	}
+};
+
+export const startCase = async (req, res, next) => {
+	try {
+		const result = await markSessionStarted(req.params.id, req.auth);
+
+		res.status(200).json({
+			success: true,
+			message: 'Session started',
+			data: result,
 		});
 	} catch (error) {
 		next(error);

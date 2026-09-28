@@ -7,6 +7,7 @@ import {
 	canWritePlaylist,
 	caseScopeFilter,
 	playlistScopeFilter,
+	transactionScopeFilter,
 } from '../../src/policies/accountScope.js';
 
 const id = () => new mongoose.Types.ObjectId();
@@ -19,11 +20,17 @@ describe('buildAuthContext', () => {
 		const accountId = id();
 		const userId = id();
 
-		const populated = buildAuthContext({ _id: userId, account: { _id: accountId }, role: 'member' });
+		const populated = buildAuthContext({
+			_id: userId,
+			username: 'associate',
+			account: { _id: accountId },
+			role: 'member',
+		});
 		const bare = buildAuthContext({ _id: userId, account: accountId, role: 'admin', isAdmin: true });
 
 		expect(populated).toEqual({
 			userId: userId.toString(),
+			username: 'associate',
 			accountId: accountId.toString(),
 			role: 'member',
 			isPlatformAdmin: false,
@@ -55,6 +62,12 @@ describe('playlistScopeFilter / canWritePlaylist', () => {
 		expect(canWritePlaylist(member, ownPlaylist)).toBe(true);
 		expect(canWritePlaylist(member, othersPlaylist)).toBe(false);
 		expect(canWritePlaylist(admin, othersPlaylist)).toBe(true);
+	});
+});
+
+describe('transactionScopeFilter', () => {
+	it('keeps transactions inside the account', () => {
+		expect(transactionScopeFilter(admin)).toEqual({ account: 'acc-1' });
 	});
 });
 

@@ -2,12 +2,20 @@ import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import ArchivedCase from '../../src/models/ArchivedCase.js';
 import Case from '../../src/models/Case.js';
+import Transaction from '../../src/models/Transaction.js';
 import {
 	archiveCase,
 	getArchivedCase,
 	listArchivedCases,
 } from '../../src/services/archiveService.js';
-import { answerAll, initModels, makeAccount, makeCase, resetDb } from '../helpers/fixtures.js';
+import {
+	answerAll,
+	initModels,
+	makeAccount,
+	makeCase,
+	makeTransaction,
+	resetDb,
+} from '../helpers/fixtures.js';
 
 beforeAll(async () => {
 	await initModels();
@@ -106,6 +114,121 @@ describe('archiveService.archiveCase', () => {
 		await archived.save();
 
 		expect((await ArchivedCase.findById(archived._id)).clientName).toBe(live.clientName);
+	});
+});
+
+describe('archiveService.archiveCase transaction record', () => {
+	const startedBy = (user) => ({
+		status: 'in_progress',
+		coreFeature: { username: user.username, userId: user._id, startedAt: new Date('2026-09-01T10:00:00Z') },
+	});
+
+	it('closes an in-progress transaction in the same step as the archive', async () => {
+		const fixture = await makeAccount({ members: 1 });
+		const live = await makeCase(fixture, { owners: [fixture.member._id], answers: answerAll() });
+		await makeTransaction(fixture, live, startedBy(fixture.member));
+
+		const archived = await archiveCase(live._id.toString(), fixture.authFor(fixture.member));
+
+		const transaction = await Transaction.findOne({ case: live._id }).lean();
+		expect(transaction.status).toBe('closed');
+		expect(transaction.archivedCase.toString()).toBe(archived._id.toString());
+		expect(transaction.termination.archived).toBe(true);
+		expect(transaction.termination.finishedAt.toISOString()).toBe(archived.archivedAt.toISOString());
+		expect(transaction.termination.conclusion.manuallyClosed).toBe(true);
+		expect(transaction.termination.conclusion.actor).toBe(fixture.member.username);
+		expect(transaction.termination.conclusion.actorId.toString()).toBe(fixture.member._id.toString());
+		// The start is kept.
+		expect(transaction.coreFeature.username).toBe(fixture.member.username);
+	});
+
+	it('closes a transaction that was never started', async () => {
+		const fixture = await makeAccount();
+		const live = await makeCase(fixture, { answers: answerAll() });
+		await makeTransaction(fixture, live);
+
+		await archiveCase(live._id.toString(), fixture.authFor(fixture.admin));
+
+		const transaction = await Transaction.findOne({ case: live._id }).lean();
+		expect(transaction.status).toBe('closed');
+		expect(transaction.coreFeature).toEqual({ username: null, userId: null, startedAt: null });
+	});
+
+	it('leaves the transaction alone when the archive is refused', async () => {
+		const fixture = await makeAccount({ members: 1 });
+		const incomplete = await makeCase(fixture, { answers: {} });
+		const complete = await makeCase(fixture, { answers: answerAll() });
+		await makeTransaction(fixture, incomplete);
+		await makeTransaction(fixture, complete);
+		const before = await Transaction.find().sort({ _id: 1 }).lean();
+
+		await expect(
+			archiveCase(incomplete._id.toString(), fixture.authFor(fixture.admin))
+		).rejects.toMatchObject({ statusCode: 409 });
+		await expect(
+			archiveCase(complete._id.toString(), fixture.authFor(fixture.member))
+		).rejects.toMatchObject({ statusCode: 404 });
+
+		expect(await Transaction.find().sort({ _id: 1 }).lean()).toEqual(before);
+	});
+
+	it('closes the transaction once when two archives race', async () => {
+		const fixture = await makeAccount({ members: 1 });
+		const live = await makeCase(fixture, { owners: [fixture.member._id], answers: answerAll() });
+		await makeTransaction(fixture, live);
+
+		const results = await Promise.allSettled([
+			archiveCase(live._id.toString(), fixture.authFor(fixture.admin)),
+			archiveCase(live._id.toString(), fixture.authFor(fixture.member)),
+		]);
+
+		const winner = results.find((r) => r.status === 'fulfilled').value;
+		const transaction = await Transaction.findOne({ case: live._id }).lean();
+		expect(transaction.status).toBe('closed');
+		expect(transaction.archivedCase.toString()).toBe(winner._id.toString());
+		expect(transaction.termination.conclusion.actorId.toString()).toBe(winner.archivedBy.toString());
+	});
+
+	it('archives a case created before transactions existed', async () => {
+		const fixture = await makeAccount();
+		const live = await makeCase(fixture, { answers: answerAll() });
+
+		await expect(archiveCase(live._id.toString(), fixture.authFor(fixture.admin))).resolves.toBeTruthy();
+		expect(await Transaction.countDocuments()).toBe(0);
+	});
+
+	it('records an automatic close without an actor', async () => {
+		const fixture = await makeAccount();
+		const live = await makeCase(fixture, { answers: answerAll() });
+		await makeTransaction(fixture, live);
+
+		await archiveCase(live._id.toString(), fixture.authFor(fixture.admin), { reason: 'purchase' });
+
+		const transaction = await Transaction.findOne({ case: live._id }).lean();
+		expect(transaction.status).toBe('closed');
+		expect(transaction.termination.conclusion).toEqual({
+			manuallyClosed: false,
+			actor: null,
+			actorId: null,
+		});
+	});
+
+	it('never changes a closed transaction', async () => {
+		const fixture = await makeAccount();
+		const live = await makeCase(fixture, { answers: answerAll() });
+		await makeTransaction(fixture, live, {
+			status: 'closed',
+			termination: {
+				archived: true,
+				finishedAt: new Date('2026-09-01T00:00:00Z'),
+				conclusion: { manuallyClosed: false, actor: null, actorId: null },
+			},
+		});
+		const before = await Transaction.findOne({ case: live._id }).lean();
+
+		await archiveCase(live._id.toString(), fixture.authFor(fixture.admin));
+
+		expect(await Transaction.findOne({ case: live._id }).lean()).toEqual(before);
 	});
 });
 

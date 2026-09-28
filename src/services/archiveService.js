@@ -8,15 +8,17 @@ import {
 import { isCaseComplete } from '../policies/caseCompletion.js';
 import { createAppError, isDuplicateKeyError } from '../utils/error.js';
 import { withTransaction } from '../utils/transaction.js';
+import { closeTransaction } from './transactionService.js';
 
 // List view only needs the headings, not students/questions/answers.
 const SUMMARY_FIELDS =
   '_id originalCaseId clientName attorney category studentNumber owners createdOn archivedAt archivedBy archiveReason';
 
 /**
- * Moves a complete case into the archive: the snapshot insert and the live
- * delete commit together or not at all. The caller must be able to see the
- * case (an account admin or one of its owners).
+ * Moves a complete case into the archive: the snapshot insert, the close of
+ * the case's Transaction and the live delete commit together or not at all.
+ * The caller must be able to see the case (an account admin or one of its
+ * owners).
  *
  * `reason` is 'manual' for now; the automatic archive after a purchase will
  * pass 'purchase'.
@@ -48,6 +50,8 @@ export const archiveCase = async (caseId, auth, { reason = 'manual' } = {}) => {
         ],
         { session }
       );
+
+      await closeTransaction({ caseId: _id, archived, auth, reason }, session);
 
       await Case.deleteOne({ _id }, { session });
 
