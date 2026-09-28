@@ -1,7 +1,8 @@
 import mongoose from 'mongoose';
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Case from '../../src/models/Case.js';
+import Transaction from '../../src/models/Transaction.js';
 import { createCase, listCases, setCaseOwners, updateCase } from '../../src/services/caseService.js';
 import { initModels, makeAccount, makeCase, resetDb } from '../helpers/fixtures.js';
 
@@ -100,6 +101,79 @@ describe('caseService.createCase', () => {
 			message: 'clientName, attorney, and category are required',
 			statusCode: 400,
 		});
+	});
+});
+
+describe('caseService.createCase transaction record', () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it('opens an active transaction for the new case', async () => {
+		const fixture = await makeAccount();
+		const before = Date.now();
+
+		const created = await createCase(
+			validPayload({ timezone: 'America/Chicago' }),
+			fixture.authFor(fixture.admin)
+		);
+
+		const transactions = await Transaction.find().lean();
+		expect(transactions).toHaveLength(1);
+		const [transaction] = transactions;
+		expect(transaction.account.toString()).toBe(fixture.account._id.toString());
+		expect(transaction.createdBy.toString()).toBe(fixture.admin._id.toString());
+		expect(transaction.username).toBe(fixture.admin.username);
+		expect(transaction.case.toString()).toBe(created._id.toString());
+		expect(transaction.archivedCase).toBeNull();
+		expect(transaction.status).toBe('active');
+		expect(transaction.createdAt.getTime()).toBeGreaterThanOrEqual(before);
+		expect(transaction.createdAt.getTime()).toBeLessThanOrEqual(Date.now());
+		expect(transaction.timezone).toBe('America/Chicago');
+		expect(transaction.stripe).toEqual({ paymentIntentId: null, checkoutSessionId: null });
+		expect(transaction.coreFeature).toEqual({ username: null, userId: null, startedAt: null });
+		expect(transaction.termination).toEqual({
+			archived: false,
+			finishedAt: null,
+			conclusion: { manuallyClosed: false, actor: null, actorId: null },
+		});
+	});
+
+	it.each([
+		['missing', undefined],
+		['unknown', 'Mars/Base'],
+		['not a string', 123],
+	])('stores UTC when the timezone is %s', async (_label, timezone) => {
+		const fixture = await makeAccount();
+
+		await createCase(validPayload({ timezone }), fixture.authFor(fixture.admin));
+
+		expect((await Transaction.findOne().lean()).timezone).toBe('UTC');
+	});
+
+	it('writes no transaction when the case is invalid or the caller is a member', async () => {
+		const fixture = await makeAccount({ members: 1 });
+
+		await expect(
+			createCase(validPayload({ clientName: '' }), fixture.authFor(fixture.admin))
+		).rejects.toMatchObject({ statusCode: 400 });
+		await expect(
+			createCase(validPayload(), fixture.authFor(fixture.member))
+		).rejects.toMatchObject({ statusCode: 403 });
+
+		expect(await Transaction.countDocuments()).toBe(0);
+	});
+
+	it('creates no case when the transaction cannot be written', async () => {
+		const fixture = await makeAccount();
+		vi.spyOn(Transaction, 'create').mockRejectedValueOnce(new Error('write failed'));
+
+		await expect(createCase(validPayload(), fixture.authFor(fixture.admin))).rejects.toThrow(
+			'write failed'
+		);
+
+		expect(await Case.countDocuments()).toBe(0);
+		expect(await Transaction.countDocuments()).toBe(0);
 	});
 });
 

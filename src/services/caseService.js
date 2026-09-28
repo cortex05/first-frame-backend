@@ -6,7 +6,9 @@ import {
   caseScopeFilter,
 } from '../policies/accountScope.js';
 import { createAppError } from '../utils/error.js';
+import { withTransaction } from '../utils/transaction.js';
 import { assertActiveAccountUsers } from './accountUsers.js';
+import { openTransaction } from './transactionService.js';
 
 export const listCases = async (auth) => {
   const cases = await Case.find(caseScopeFilter(auth)).sort({ createdOn: -1 });
@@ -16,6 +18,10 @@ export const listCases = async (auth) => {
 /**
  * Only account admins create cases. `account` and `createdBy` come from the
  * caller; `owners` are the users the admin hands the case to.
+ *
+ * Creating a case is a purchase: the case and its Transaction are written in
+ * one transaction. Everything is validated first, so a rejected request
+ * writes nothing.
  */
 export const createCase = async (casePayload, auth) => {
   assertAccountAdmin(auth);
@@ -27,6 +33,7 @@ export const createCase = async (casePayload, auth) => {
     studentNumber,
     questions = [],
     owners = [],
+    timezone,
   } = casePayload || {};
 
   if (!clientName || !attorney || !category) {
@@ -49,18 +56,27 @@ export const createCase = async (casePayload, auth) => {
 
   const validatedOwners = await assertActiveAccountUsers(auth.accountId, owners);
 
-  const createdCase = await Case.create({
-    account: auth.accountId,
-    createdBy: auth.userId,
-    owners: validatedOwners,
-    clientName: String(clientName).trim(),
-    attorney: String(attorney).trim(),
-    category: normalizedCategory,
-    studentNumber: parsedStudentNumber,
-    questions,
-  });
+  return withTransaction(async (session) => {
+    const [createdCase] = await Case.create(
+      [
+        {
+          account: auth.accountId,
+          createdBy: auth.userId,
+          owners: validatedOwners,
+          clientName: String(clientName).trim(),
+          attorney: String(attorney).trim(),
+          category: normalizedCategory,
+          studentNumber: parsedStudentNumber,
+          questions,
+        },
+      ],
+      { session }
+    );
 
-  return createdCase;
+    await openTransaction({ caseDoc: createdCase, auth, timezone }, session);
+
+    return createdCase;
+  });
 };
 
 export const updateCase = async (caseId, casePayload, auth) => {

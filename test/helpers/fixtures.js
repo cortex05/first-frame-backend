@@ -5,6 +5,7 @@ import ArchivedCase from '../../src/models/ArchivedCase.js';
 import Case from '../../src/models/Case.js';
 import Playlist from '../../src/models/Playlist.js';
 import Recommended from '../../src/models/Recommended.js';
+import Transaction from '../../src/models/Transaction.js';
 import User from '../../src/models/User.js';
 import { buildAuthContext } from '../../src/policies/accountScope.js';
 
@@ -13,7 +14,7 @@ export const PASSWORD = 'password123';
 // Hashed once: bcrypt per fixture user would dominate test time.
 const hashedPassword = bcrypt.hashSync(PASSWORD, 4);
 
-const MODELS = [Account, User, Case, ArchivedCase, Playlist, Recommended];
+const MODELS = [Account, User, Case, ArchivedCase, Playlist, Recommended, Transaction];
 
 /**
  * Creates every collection and its indexes up front. A transaction cannot
@@ -106,5 +107,18 @@ export const makeCase = (fixture, overrides = {}) =>
 		category: 'criminal.theft',
 		studentNumber: 2,
 		questions: QUESTIONS,
+		...overrides,
+	});
+
+/**
+ * A transaction for a case made with `makeCase` (which, unlike the service,
+ * creates none). `overrides` seeds later lifecycle states.
+ */
+export const makeTransaction = (fixture, caseDoc, overrides = {}) =>
+	Transaction.create({
+		account: fixture.account._id,
+		createdBy: fixture.admin._id,
+		username: fixture.admin.username,
+		case: caseDoc._id,
 		...overrides,
 	});

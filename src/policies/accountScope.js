@@ -16,6 +16,7 @@ import { createAppError } from '../utils/error.js';
  */
 export const buildAuthContext = (user) => ({
   userId: String(user._id),
+  username: user.username,
   accountId: String(user.account?._id ?? user.account),
   role: user.role,
   isPlatformAdmin: Boolean(user.isAdmin),
@@ -46,6 +47,10 @@ export const archivedCaseScopeFilter = (auth) => caseScopeFilter(auth);
 
 // Every playlist in the account is visible to everyone in it.
 export const playlistScopeFilter = (auth) => ({ account: auth.accountId });
+
+// Only account admins list transactions (the route and the service check
+// that); this filter keeps them inside the caller's account.
+export const transactionScopeFilter = (auth) => ({ account: auth.accountId });
 
 export const canWritePlaylist = (auth, playlist) =>
   isAccountAdmin(auth) || String(playlist.createdBy) === auth.userId;
