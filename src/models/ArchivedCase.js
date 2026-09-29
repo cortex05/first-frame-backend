@@ -20,6 +20,8 @@ const immutable = (fields) =>
  */
 const ArchivedCaseSchema = new Schema(
   immutable({
+    // caseFields deliberately excludes Case.studentDetails: student details
+    // expire with the live case (spec 005).
     ...caseFields,
     // Unique so a case can be archived at most once, even by racing requests.
     originalCaseId: {

@@ -97,6 +97,12 @@ export const QUESTIONS = [
 export const answerAll = (questions = QUESTIONS) =>
 	Object.fromEntries(questions.map((q) => [q.id, { 'student-1': { label: 'true' } }]));
 
+// Seed for Case.studentDetails (spec 005), keyed like the stored map.
+export const STUDENT_DETAILS = {
+	1: { age: 34, occupation: 'Teacher', gender: 'female', race: 'Hispanic' },
+	2: { age: 50 },
+};
+
 export const makeCase = (fixture, overrides = {}) =>
 	Case.create({
 		account: fixture.account._id,

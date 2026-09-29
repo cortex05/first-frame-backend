@@ -4,7 +4,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import Case from '../../src/models/Case.js';
 import Transaction from '../../src/models/Transaction.js';
 import { createCase, listCases, setCaseOwners, updateCase } from '../../src/services/caseService.js';
-import { initModels, makeAccount, makeCase, resetDb } from '../helpers/fixtures.js';
+import { STUDENT_DETAILS, initModels, makeAccount, makeCase, resetDb } from '../helpers/fixtures.js';
 
 const validPayload = (overrides = {}) => ({
 	clientName: '  Jane Client  ',
@@ -356,5 +356,95 @@ describe('caseService.setCaseOwners', () => {
 		await expect(
 			setCaseOwners(new mongoose.Types.ObjectId().toString(), [], fixture.authFor(fixture.admin))
 		).rejects.toMatchObject({ statusCode: 404 });
+	});
+});
+
+describe('caseService student details (spec 005)', () => {
+	it('ignores studentDetails when creating a case', async () => {
+		const fixture = await makeAccount();
+
+		const created = await createCase(
+			validPayload({ studentDetails: { 1: { age: 30 } } }),
+			fixture.authFor(fixture.admin)
+		);
+
+		const inDb = await Case.findById(created._id).lean();
+		expect(inDb.studentDetails).toEqual({});
+	});
+
+	it('refuses an update whose only field is studentDetails', async () => {
+		const fixture = await makeAccount();
+		const created = await makeCase(fixture, { studentDetails: STUDENT_DETAILS });
+
+		await expect(
+			updateCase(created._id.toString(), { studentDetails: {} }, fixture.authFor(fixture.admin))
+		).rejects.toMatchObject({ message: 'No updatable fields provided', statusCode: 400 });
+	});
+
+	it('leaves studentDetails alone on a whole-case update', async () => {
+		const fixture = await makeAccount();
+		const created = await makeCase(fixture, { studentDetails: STUDENT_DETAILS });
+
+		const updated = await updateCase(
+			created._id.toString(),
+			{ clientName: 'Renamed', studentDetails: { 1: { age: 99 } } },
+			fixture.authFor(fixture.admin)
+		);
+
+		expect(updated.clientName).toBe('Renamed');
+		const inDb = await Case.findById(created._id).lean();
+		expect(inDb.studentDetails).toEqual(STUDENT_DETAILS);
+	});
+
+	it('drops the details of students above a lowered studentNumber', async () => {
+		const fixture = await makeAccount();
+		const details = Object.fromEntries([1, 2, 3, 4, 5].map((n) => [n, { age: 20 + n }]));
+		const created = await makeCase(fixture, { studentNumber: 5, studentDetails: details });
+
+		const updated = await updateCase(created._id.toString(), { studentNumber: 3 }, fixture.authFor(fixture.admin));
+
+		expect(updated.studentNumber).toBe(3);
+		const inDb = await Case.findById(created._id).lean();
+		expect(Object.keys(inDb.studentDetails).sort()).toEqual(['1', '2', '3']);
+	});
+
+	it('keeps every detail when studentNumber goes up or stays the same', async () => {
+		const fixture = await makeAccount();
+		const created = await makeCase(fixture, { studentNumber: 2, studentDetails: STUDENT_DETAILS });
+
+		await updateCase(created._id.toString(), { studentNumber: 2 }, fixture.authFor(fixture.admin));
+		await updateCase(created._id.toString(), { studentNumber: 6 }, fixture.authFor(fixture.admin));
+
+		const inDb = await Case.findById(created._id).lean();
+		expect(inDb.studentDetails).toEqual(STUDENT_DETAILS);
+	});
+
+	it('still 404s a studentNumber change on a case the caller cannot see', async () => {
+		const fixture = await makeAccount({ members: 1 });
+		const created = await makeCase(fixture, { studentNumber: 2, studentDetails: STUDENT_DETAILS });
+
+		await expect(
+			updateCase(created._id.toString(), { studentNumber: 1 }, fixture.authFor(fixture.member))
+		).rejects.toMatchObject({ statusCode: 404 });
+
+		const inDb = await Case.findById(created._id).lean();
+		expect(inDb.studentDetails).toEqual(STUDENT_DETAILS);
+	});
+
+	it('serializes studentDetails as a plain object with string keys', async () => {
+		const fixture = await makeAccount();
+		await makeCase(fixture, { studentDetails: STUDENT_DETAILS });
+		await makeCase(fixture, { clientName: 'No details' });
+
+		const result = await listCases(fixture.authFor(fixture.admin));
+		const json = JSON.parse(JSON.stringify(result));
+
+		const withDetails = json.find((c) => c.clientName === 'Client');
+		const without = json.find((c) => c.clientName === 'No details');
+		expect(withDetails.studentDetails).toEqual({
+			1: { age: 34, occupation: 'Teacher', gender: 'female', race: 'Hispanic' },
+			2: { age: 50 },
+		});
+		expect(without.studentDetails).toEqual({});
 	});
 });

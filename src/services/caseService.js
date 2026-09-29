@@ -8,6 +8,7 @@ import {
 import { createAppError } from '../utils/error.js';
 import { withTransaction } from '../utils/transaction.js';
 import { assertActiveAccountUsers } from './accountUsers.js';
+import { buildDetailsPrune } from './studentDetailsService.js';
 import { openTransaction } from './transactionService.js';
 
 export const listCases = async (auth) => {
@@ -84,6 +85,9 @@ export const updateCase = async (caseId, casePayload, auth) => {
 
   // This whitelist is what keeps account, createdBy and owners out of reach of
   // a regular update. Owners change only through setCaseOwners (admin only).
+  // studentDetails is left out on purpose: it is written only through
+  // PUT /cases/:id/students/:number/details, so a stale whole-case save
+  // can't overwrite it.
   const allowedFields = [
     'clientName',
     'attorney',
@@ -149,11 +153,21 @@ export const updateCase = async (caseId, casePayload, auth) => {
     throw createAppError('questions must be an array', 400);
   }
 
-  const updatedCase = await Case.findOneAndUpdate(
-    { _id: caseId, ...caseScopeFilter(auth) },
-    { $set: update },
-    { returnDocument: 'after', runValidators: true }
-  );
+  const filter = { _id: caseId, ...caseScopeFilter(auth) };
+  const options = { returnDocument: 'after', runValidators: true };
+
+  // Changing the class size drops the details of students who no longer
+  // exist, read and written in one transaction so nothing slips in between.
+  const updatedCase =
+    update.studentNumber === undefined
+      ? await Case.findOneAndUpdate(filter, { $set: update }, options)
+      : await withTransaction(async (session) => {
+          const prune = await buildDetailsPrune(caseId, auth, update.studentNumber, session);
+          const changes = Object.keys(prune).length
+            ? { $set: update, $unset: prune }
+            : { $set: update };
+          return Case.findOneAndUpdate(filter, changes, { ...options, session });
+        });
 
   if (!updatedCase) {
     throw createAppError('Case not found', 404);
