@@ -1,5 +1,12 @@
 import mongoose from 'mongoose';
-import { QUESTION_TYPES } from '../types.js';
+import {
+  QUESTION_TYPES,
+  STUDENT_AGE_MAX,
+  STUDENT_AGE_MIN,
+  STUDENT_GENDERS,
+  STUDENT_OCCUPATION_MAX,
+  STUDENT_RACE_MAX,
+} from '../types.js';
 import { CASE_CATEGORY_IDS } from '../caseCategories.js';
 
 const { Schema } = mongoose;
@@ -33,9 +40,27 @@ const StudentSchema = new Schema(
   { _id: false }
 );
 
+// Optional, viewer-only notes about one student. Never part of scoring.
+const StudentDetailsSchema = new Schema(
+  {
+    age: {
+      type: Number,
+      min: STUDENT_AGE_MIN,
+      max: STUDENT_AGE_MAX,
+      validate: { validator: Number.isInteger, message: 'age must be a whole number' },
+    },
+    occupation: { type: String, trim: true, maxlength: STUDENT_OCCUPATION_MAX },
+    gender: { type: String, enum: STUDENT_GENDERS },
+    race: { type: String, trim: true, maxlength: STUDENT_RACE_MAX },
+  },
+  { _id: false }
+);
+
 /**
  * Field definitions shared by Case and ArchivedCase, so an archive is always a
  * faithful snapshot and a new case field cannot be forgotten on the archive.
+ * The one deliberate exception is `studentDetails`, defined on CaseSchema
+ * only: details expire with the live case and must never be archived (spec 005).
  */
 const caseFields = {
   account: {
@@ -81,10 +106,18 @@ const caseFields = {
   seated: { type: Boolean, default: false },
 };
 
-const CaseSchema = new Schema(caseFields, {
-  collection: 'cases',
-  versionKey: false,
-});
+const CaseSchema = new Schema(
+  {
+    ...caseFields,
+    // Keyed by String(student number), like answers[questionId]. Written only
+    // through studentDetailsService; kept out of caseFields so it is not archived.
+    studentDetails: { type: Map, of: StudentDetailsSchema, default: {} },
+  },
+  {
+    collection: 'cases',
+    versionKey: false,
+  }
+);
 
 // An admin's case list, and a member's "cases I own" list.
 CaseSchema.index({ account: 1, createdOn: -1 });
@@ -92,5 +125,5 @@ CaseSchema.index({ account: 1, owners: 1 });
 
 const CaseModel = mongoose.models.Case || mongoose.model('Case', CaseSchema);
 
-export { CaseSchema, QuestionSchema, StudentSchema, caseFields };
+export { CaseSchema, QuestionSchema, StudentDetailsSchema, StudentSchema, caseFields };
 export default CaseModel;

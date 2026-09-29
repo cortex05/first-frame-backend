@@ -15,6 +15,8 @@ const cases = [
 	['answers is not an object', { questions: [q1], answers: null }, false],
 	['every question answered by one student', { questions: [q1, q2], answers: { 'q-1': { s1: 'a' }, 'q-2': { s2: 'b' } } }, true],
 	['stray answers for a removed question are ignored', { questions: [q1], answers: { 'q-1': { s1: 'a' }, 'q-gone': {} } }, true],
+	['student details do not complete a case', { questions: [q1], answers: {}, studentDetails: { 1: { age: 30 } } }, false],
+	['student details do not block a complete case', { questions: [q1], answers: { 'q-1': { s1: 'a' } }, studentDetails: { 1: { age: 30 } } }, true],
 ];
 
 describe('isCaseComplete', () => {

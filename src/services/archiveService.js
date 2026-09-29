@@ -37,7 +37,8 @@ export const archiveCase = async (caseId, auth, { reason = 'manual' } = {}) => {
         throw createAppError('Case is not complete: every question must have answers', 409);
       }
 
-      const { _id, ...snapshot } = liveCase.toObject();
+      // Student details expire with the case (spec 005); never archive them.
+      const { _id, studentDetails, ...snapshot } = liveCase.toObject();
 
       const [archived] = await ArchivedCase.create(
         [

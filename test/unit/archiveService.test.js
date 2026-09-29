@@ -9,6 +9,7 @@ import {
 	listArchivedCases,
 } from '../../src/services/archiveService.js';
 import {
+	STUDENT_DETAILS,
 	answerAll,
 	initModels,
 	makeAccount,
@@ -275,5 +276,45 @@ describe('archiveService.listArchivedCases / getArchivedCase', () => {
 		await expect(
 			getArchivedCase(archived._id.toString(), other.authFor(other.admin))
 		).rejects.toMatchObject({ statusCode: 404 });
+	});
+});
+
+describe('archiveService student details (spec 005)', () => {
+	it('never writes student details into the archive', async () => {
+		const fixture = await makeAccount();
+		const live = await makeCase(fixture, {
+			answers: answerAll(),
+			chartData: { rects: [{ id: 'r1', assignedStudents: [{ id: 1 }, { id: 2 }] }] },
+			students: [{ number: 1 }, { number: 2 }],
+			studentDetails: STUDENT_DETAILS,
+			seated: true,
+		});
+		const before = await Case.findById(live._id).lean();
+		expect(before.studentDetails).toEqual(STUDENT_DETAILS);
+
+		const archived = await archiveCase(live._id.toString(), fixture.authFor(fixture.admin));
+
+		// Raw driver read: nothing Mongoose hides on the way out.
+		const raw = await ArchivedCase.collection.findOne({ originalCaseId: live._id });
+		expect(raw).not.toHaveProperty('studentDetails');
+		for (const field of ['answers', 'chartData', 'students', 'questions', 'studentNumber', 'seated']) {
+			expect(raw[field]).toEqual(before[field]);
+		}
+
+		expect(archived.toJSON()).not.toHaveProperty('studentDetails');
+		const fetched = await getArchivedCase(archived._id.toString(), fixture.authFor(fixture.admin));
+		expect(fetched.toJSON()).not.toHaveProperty('studentDetails');
+	});
+
+	it('leaves no copy of the details behind once archived', async () => {
+		const fixture = await makeAccount();
+		const live = await makeCase(fixture, { answers: answerAll(), studentDetails: STUDENT_DETAILS });
+		await makeTransaction(fixture, live);
+
+		await archiveCase(live._id.toString(), fixture.authFor(fixture.admin));
+
+		expect(await Case.collection.findOne({ _id: live._id })).toBeNull();
+		const transaction = await Transaction.collection.findOne({ case: live._id });
+		expect(JSON.stringify(transaction)).not.toMatch(/studentDetails|Teacher|Hispanic/);
 	});
 });

@@ -4,6 +4,7 @@ import {
   updateCase as updateCaseService,
   setCaseOwners as setCaseOwnersService } from '../services/caseService.js';
 import { archiveCase as archiveCaseService } from '../services/archiveService.js';
+import { setStudentDetails as setStudentDetailsService } from '../services/studentDetailsService.js';
 import { markSessionStarted } from '../services/transactionService.js';
 
 export const listCases = async (req, res, next) => {
@@ -83,6 +84,20 @@ export const startCase = async (req, res, next) => {
 		res.status(200).json({
 			success: true,
 			message: 'Session started',
+			data: result,
+		});
+	} catch (error) {
+		next(error);
+	}
+};
+
+export const setStudentDetails = async (req, res, next) => {
+	try {
+		const result = await setStudentDetailsService(req.params.id, req.params.number, req.body, req.auth);
+
+		res.status(200).json({
+			success: true,
+			message: 'Student details updated successfully',
 			data: result,
 		});
 	} catch (error) {
