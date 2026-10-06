@@ -30,12 +30,17 @@ const ArchivedCaseSchema = new Schema(
       unique: true,
     },
     archivedAt: { type: Date, default: Date.now },
+    // Null only for an automatic archive, which has no user behind it.
     archivedBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      default: null,
+      required: function () {
+        return this.archiveReason !== 'purchase';
+      },
     },
-    // 'purchase' is reserved for the automatic archive a week after a purchase.
+    // 'purchase' is the automatic archive a week after a purchase
+    // (src/jobs/autoArchiveExpiredCases.js).
     archiveReason: {
       type: String,
       enum: ARCHIVE_REASONS,

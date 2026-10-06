@@ -198,7 +198,7 @@ describe('archiveService.archiveCase transaction record', () => {
 		expect(await Transaction.countDocuments()).toBe(0);
 	});
 
-	it('records an automatic close without an actor', async () => {
+	it('records an automatic close with the auto actor', async () => {
 		const fixture = await makeAccount();
 		const live = await makeCase(fixture, { answers: answerAll() });
 		await makeTransaction(fixture, live);
@@ -209,7 +209,7 @@ describe('archiveService.archiveCase transaction record', () => {
 		expect(transaction.status).toBe('closed');
 		expect(transaction.termination.conclusion).toEqual({
 			manuallyClosed: false,
-			actor: null,
+			actor: 'auto',
 			actorId: null,
 		});
 	});
@@ -316,5 +316,31 @@ describe('archiveService student details (spec 005)', () => {
 		expect(await Case.collection.findOne({ _id: live._id })).toBeNull();
 		const transaction = await Transaction.collection.findOne({ case: live._id });
 		expect(JSON.stringify(transaction)).not.toMatch(/studentDetails|Teacher|Hispanic/);
+	});
+});
+
+describe('ArchivedCase.archivedBy', () => {
+	// The same snapshot archiveLiveCase builds.
+	const snapshotOf = async () => {
+		const fixture = await makeAccount();
+		const { _id, studentDetails, ...snapshot } = (await makeCase(fixture)).toObject();
+		return { ...snapshot, originalCaseId: _id };
+	};
+
+	it('is required for a manual archive', async () => {
+		const snapshot = await snapshotOf();
+
+		await expect(ArchivedCase.create({ ...snapshot, archiveReason: 'manual' })).rejects.toMatchObject({
+			name: 'ValidationError',
+			errors: { archivedBy: expect.anything() },
+		});
+	});
+
+	it('may be null for an automatic archive', async () => {
+		const snapshot = await snapshotOf();
+
+		const archived = await ArchivedCase.create({ ...snapshot, archiveReason: 'purchase', archivedBy: null });
+
+		expect((await ArchivedCase.findById(archived._id).lean()).archivedBy).toBeNull();
 	});
 });

@@ -63,7 +63,7 @@ const TransactionSchema = new Schema(
       finishedAt: { type: Date, default: null },
       conclusion: {
         manuallyClosed: { type: Boolean, default: false },
-        // Username of whoever archived the case; null for an automatic close.
+        // Username of whoever archived the case; 'auto' for an automatic close.
         actor: { type: String, default: null },
         actorId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
       },
@@ -78,7 +78,8 @@ const TransactionSchema = new Schema(
 // The admin list, unfiltered and filtered by status.
 TransactionSchema.index({ account: 1, createdAt: -1 });
 TransactionSchema.index({ account: 1, status: 1, createdAt: -1 });
-// The future sweep that closes transactions a week after purchase.
+// The sweep that closes transactions a week after purchase
+// (src/jobs/autoArchiveExpiredCases.js).
 TransactionSchema.index({ status: 1, createdAt: 1 });
 
 const Transaction =

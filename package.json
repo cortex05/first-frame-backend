@@ -11,7 +11,8 @@
     "migrate:case-category": "node scripts/migrateCaseCategory.js",
     "admin:grant": "node scripts/grantAdmin.js",
     "test:http": "vitest run test/http",
-    "reset:accounts": "node scripts/resetForAccounts.js"
+    "reset:accounts": "node scripts/resetForAccounts.js",
+    "job:auto-archive": "node scripts/autoArchive.js"
   },
   "type": "module",
   "author": "Daniel",

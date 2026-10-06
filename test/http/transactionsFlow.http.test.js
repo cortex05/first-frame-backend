@@ -1,7 +1,8 @@
 import request from 'supertest';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import app from '../../src/app.js';
+import { runAutoArchive } from '../../src/jobs/autoArchiveExpiredCases.js';
 import { initModels, resetDb } from '../helpers/fixtures.js';
 
 const bearer = (token) => ({ Authorization: `Bearer ${token}` });
@@ -141,5 +142,51 @@ describe('transactions end to end', () => {
 		const listed = await request(app).get('/api/transactions').set(bearer(admin.token));
 		expect(listed.body.data).toHaveLength(1);
 		expect(listed.body.data[0]).toMatchObject({ status: 'active', timezone: 'UTC' });
+	});
+
+	it('lists an auto-archived case to the account admin', async () => {
+		const admin = await register('d');
+
+		const created = await request(app).post('/api/cases').set(bearer(admin.token)).send({
+			clientName: 'Expired Client',
+			attorney: 'Attorney',
+			category: 'criminal.theft',
+			studentNumber: 1,
+		});
+		expect(created.status).toBe(201);
+		const caseId = created.body.data._id;
+
+		// createdAt is immutable, so move the clock forward instead of backdating.
+		const eightDaysLater = new Date(Date.now() + 8 * 24 * 60 * 60 * 1000);
+		const summary = await runAutoArchive({ now: eightDaysLater, logger: { error: vi.fn() } });
+		expect(summary.failed).toBe(0);
+
+		const list = await request(app).get('/api/archived-cases').set(bearer(admin.token));
+		expect(list.status).toBe(200);
+		expect(list.body.data).toHaveLength(1);
+		expect(list.body.data[0]).toMatchObject({
+			originalCaseId: caseId,
+			archiveReason: 'purchase',
+			archivedBy: null,
+		});
+
+		const detail = await request(app)
+			.get(`/api/archived-cases/${list.body.data[0]._id}`)
+			.set(bearer(admin.token));
+		expect(detail.status).toBe(200);
+		expect(detail.body.data).toMatchObject({ archiveReason: 'purchase', archivedBy: null });
+
+		const closed = await request(app).get('/api/transactions?status=closed').set(bearer(admin.token));
+		expect(closed.status).toBe(200);
+		expect(closed.body.data).toHaveLength(1);
+		expect(closed.body.data[0].termination).toMatchObject({
+			archived: true,
+			conclusion: { manuallyClosed: false, actor: 'auto', actorId: null },
+		});
+
+		// The live case is gone.
+		expect(
+			(await request(app).post(`/api/cases/${caseId}/start`).set(bearer(admin.token))).status
+		).toBe(404);
 	});
 });

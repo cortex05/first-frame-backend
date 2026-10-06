@@ -15,13 +15,38 @@ const SUMMARY_FIELDS =
   '_id originalCaseId clientName attorney category studentNumber owners createdOn archivedAt archivedBy archiveReason';
 
 /**
- * Moves a complete case into the archive: the snapshot insert, the close of
- * the case's Transaction and the live delete commit together or not at all.
- * The caller must be able to see the case (an account admin or one of its
- * owners).
+ * The snapshot insert, the close of the case's Transaction and the live delete.
+ * Must run inside a transaction so the three commit together or not at all.
+ */
+const archiveLiveCase = async (liveCase, { archivedBy, reason, auth }, session) => {
+  // Student details expire with the case (spec 005); never archive them.
+  const { _id, studentDetails, ...snapshot } = liveCase.toObject();
+
+  const [archived] = await ArchivedCase.create(
+    [
+      {
+        ...snapshot,
+        originalCaseId: _id,
+        archivedBy,
+        archiveReason: reason,
+      },
+    ],
+    { session }
+  );
+
+  await closeTransaction({ caseId: _id, archived, auth, reason }, session);
+
+  await Case.deleteOne({ _id }, { session });
+
+  return archived;
+};
+
+/**
+ * Moves a complete case into the archive. The caller must be able to see the
+ * case (an account admin or one of its owners).
  *
- * `reason` is 'manual' for now; the automatic archive after a purchase will
- * pass 'purchase'.
+ * `reason` is 'manual' through the API; the automatic archive uses
+ * `autoArchiveCase` instead.
  */
 export const archiveCase = async (caseId, auth, { reason = 'manual' } = {}) => {
   assertValidObjectId(caseId, 'case id');
@@ -37,32 +62,39 @@ export const archiveCase = async (caseId, auth, { reason = 'manual' } = {}) => {
         throw createAppError('Case is not complete: every question must have answers', 409);
       }
 
-      // Student details expire with the case (spec 005); never archive them.
-      const { _id, studentDetails, ...snapshot } = liveCase.toObject();
-
-      const [archived] = await ArchivedCase.create(
-        [
-          {
-            ...snapshot,
-            originalCaseId: _id,
-            archivedBy: auth.userId,
-            archiveReason: reason,
-          },
-        ],
-        { session }
-      );
-
-      await closeTransaction({ caseId: _id, archived, auth, reason }, session);
-
-      await Case.deleteOne({ _id }, { session });
-
-      return archived;
+      return archiveLiveCase(liveCase, { archivedBy: auth.userId, reason, auth }, session);
     });
   } catch (error) {
     // A concurrent archive of the same case won: from this caller's point of
     // view the live case is gone.
     if (isDuplicateKeyError(error)) {
       throw createAppError('Case not found', 404);
+    }
+    throw error;
+  }
+};
+
+/**
+ * The automatic archive a week after purchase, run by the auto-archive job. No
+ * user is behind it, so there is no access scope, and the case is archived
+ * whether or not it is complete.
+ *
+ * Returns null when the case is already gone (archived by someone else first).
+ */
+export const autoArchiveCase = async (caseId) => {
+  try {
+    return await withTransaction(async (session) => {
+      const liveCase = await Case.findById(caseId).session(session);
+      if (!liveCase) {
+        return null;
+      }
+
+      return archiveLiveCase(liveCase, { archivedBy: null, reason: 'purchase', auth: null }, session);
+    });
+  } catch (error) {
+    // A concurrent manual archive of the same case won.
+    if (isDuplicateKeyError(error)) {
+      return null;
     }
     throw error;
   }

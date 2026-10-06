@@ -74,11 +74,11 @@ export const markSessionStarted = async (caseId, auth) => {
 };
 
 // 'manual' is a user pressing Archive; 'purchase' is the automatic close a
-// week after purchase, which has no actor.
+// week after purchase, recorded with actor 'auto' and no actorId.
 const conclusionFor = (reason, auth) =>
   reason === 'manual'
     ? { manuallyClosed: true, actor: auth.username, actorId: auth.userId }
-    : { manuallyClosed: false, actor: null, actorId: null };
+    : { manuallyClosed: false, actor: 'auto', actorId: null };
 
 /**
  * Closes the transaction of a case being archived. Must run inside the archive
