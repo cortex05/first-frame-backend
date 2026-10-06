@@ -6,6 +6,7 @@ import casesRouter from './cases.js';
 import archivedCasesRouter from './archivedCases.js';
 import recommendedRouter from './recommended.js';
 import transactionsRouter from './transactions.js';
+import agreementsRouter from './agreements.js';
 
 const router = express.Router();
 
@@ -16,5 +17,6 @@ router.use('/cases', casesRouter);
 router.use('/archived-cases', archivedCasesRouter);
 router.use('/recommended', recommendedRouter);
 router.use('/transactions', transactionsRouter);
+router.use('/agreements', agreementsRouter);
 
 export default router;

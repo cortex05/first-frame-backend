@@ -12,7 +12,8 @@
     "admin:grant": "node scripts/grantAdmin.js",
     "test:http": "vitest run test/http",
     "reset:accounts": "node scripts/resetForAccounts.js",
-    "job:auto-archive": "node scripts/autoArchive.js"
+    "job:auto-archive": "node scripts/autoArchive.js",
+    "terms:publish": "node scripts/publishTerms.js"
   },
   "type": "module",
   "author": "Daniel",

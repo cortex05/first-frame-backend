@@ -1,6 +1,8 @@
 import bcrypt from 'bcryptjs';
 
 import Account from '../../src/models/Account.js';
+import Agreement from '../../src/models/Agreement.js';
+import AgreementRecord from '../../src/models/AgreementRecord.js';
 import ArchivedCase from '../../src/models/ArchivedCase.js';
 import Case from '../../src/models/Case.js';
 import Playlist from '../../src/models/Playlist.js';
@@ -8,13 +10,24 @@ import Recommended from '../../src/models/Recommended.js';
 import Transaction from '../../src/models/Transaction.js';
 import User from '../../src/models/User.js';
 import { buildAuthContext } from '../../src/policies/accountScope.js';
+import { clearAgreementCache } from '../../src/services/agreementService.js';
 
 export const PASSWORD = 'password123';
 
 // Hashed once: bcrypt per fixture user would dominate test time.
 const hashedPassword = bcrypt.hashSync(PASSWORD, 4);
 
-const MODELS = [Account, User, Case, ArchivedCase, Playlist, Recommended, Transaction];
+const MODELS = [
+	Account,
+	User,
+	Case,
+	ArchivedCase,
+	Playlist,
+	Recommended,
+	Transaction,
+	Agreement,
+	AgreementRecord,
+];
 
 /**
  * Creates every collection and its indexes up front. A transaction cannot
@@ -32,6 +45,29 @@ export const resetDb = async () => {
 	for (const Model of MODELS) {
 		await Model.deleteMany({});
 	}
+	clearAgreementCache();
+};
+
+// The version seedAgreement() publishes by default; registration must send it.
+export const TERMS_VERSION = '01-01-2026';
+
+/**
+ * Publishes a version of the terms (spec 008) and clears the cache so the next
+ * request sees it. Registration fails with 503 until one exists.
+ */
+export const seedAgreement = async ({
+	termsVersion = TERMS_VERSION,
+	dateImplemented,
+	agreementText = `Terms ${termsVersion}`,
+} = {}) => {
+	const [month, day, year] = termsVersion.split('-').map(Number);
+	const agreement = await Agreement.create({
+		termsVersion,
+		agreementText,
+		dateImplemented: dateImplemented ?? new Date(Date.UTC(year, month - 1, day)),
+	});
+	clearAgreementCache();
+	return agreement;
 };
 
 let sequence = 0;

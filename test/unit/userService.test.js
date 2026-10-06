@@ -2,15 +2,24 @@ import jwt from 'jsonwebtoken';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import Account from '../../src/models/Account.js';
+import AgreementRecord from '../../src/models/AgreementRecord.js';
 import User from '../../src/models/User.js';
 import { changePassword, login, register } from '../../src/services/userService.js';
-import { PASSWORD, initModels, makeAccount, resetDb } from '../helpers/fixtures.js';
+import {
+	PASSWORD,
+	TERMS_VERSION,
+	initModels,
+	makeAccount,
+	resetDb,
+	seedAgreement,
+} from '../helpers/fixtures.js';
 
 const validRegistration = (overrides = {}) => ({
 	accountName: 'Cortes Law',
 	username: 'daniel',
 	email: 'Daniel@Example.com',
 	password: 'secret123',
+	termsVersion: TERMS_VERSION,
 	...overrides,
 });
 
@@ -23,6 +32,10 @@ beforeEach(async () => {
 });
 
 describe('userService.register', () => {
+	beforeEach(async () => {
+		await seedAgreement();
+	});
+
 	it('creates an account and its first user as the account admin, linked both ways', async () => {
 		const session = await register(validRegistration());
 
@@ -48,6 +61,7 @@ describe('userService.register', () => {
 			accountName: 'Cortes Law',
 			role: 'admin',
 			mustChangePassword: false,
+			mustAcceptTerms: false,
 		});
 		expect(jwt.verify(session.token, process.env.JWT_SECRET).id).toBe(session.userId.toString());
 		expect(session.password).toBeUndefined();
@@ -102,6 +116,84 @@ describe('userService.register', () => {
 
 		expect(await Account.countDocuments()).toBe(1);
 	});
+
+	it('records the acceptance of the current terms with the account', async () => {
+		const session = await register(validRegistration());
+
+		const records = await AgreementRecord.find().lean();
+		expect(records).toHaveLength(1);
+		expect(records[0]).toMatchObject({ termsVersion: TERMS_VERSION });
+		expect(records[0].userId.toString()).toBe(session.userId.toString());
+		expect(records[0].accountId.toString()).toBe(session.accountId.toString());
+		expect(records[0].acceptedAt).toBeInstanceOf(Date);
+		expect((await Account.findById(session.accountId)).acceptedTermsVersion).toBe(TERMS_VERSION);
+	});
+
+	it.each([
+		['missing', undefined],
+		['outdated', '12-31-2025'],
+	])('rejects a %s terms version and creates nothing', async (_, termsVersion) => {
+		await expect(register(validRegistration({ termsVersion }))).rejects.toMatchObject({
+			statusCode: 409,
+			code: 'TERMS_OUTDATED',
+		});
+
+		expect(await Account.countDocuments()).toBe(0);
+		expect(await User.countDocuments()).toBe(0);
+		expect(await AgreementRecord.countDocuments()).toBe(0);
+	});
+
+	it('fails closed when no terms are published', async () => {
+		await resetDb();
+
+		await expect(register(validRegistration())).rejects.toMatchObject({
+			statusCode: 503,
+			code: 'TERMS_UNAVAILABLE',
+		});
+		expect(await Account.countDocuments()).toBe(0);
+	});
+
+	it('leaves no acceptance behind when the user insert fails', async () => {
+		await register(validRegistration());
+
+		await expect(
+			register(validRegistration({ username: 'other', email: 'daniel@example.com' }))
+		).rejects.toMatchObject({ statusCode: 409 });
+
+		expect(await AgreementRecord.countDocuments()).toBe(1);
+	});
+});
+
+describe('session mustAcceptTerms', () => {
+	it('is false when no terms are published', async () => {
+		const fixture = await makeAccount();
+
+		expect((await login(fixture.admin.email, PASSWORD)).mustAcceptTerms).toBe(false);
+	});
+
+	it('is true until the account has accepted the current version', async () => {
+		const fixture = await makeAccount({ members: 1 });
+		await seedAgreement();
+
+		expect((await login(fixture.admin.email, PASSWORD)).mustAcceptTerms).toBe(true);
+		expect((await login(fixture.member.email, PASSWORD)).mustAcceptTerms).toBe(true);
+
+		await Account.updateOne({ _id: fixture.account._id }, { acceptedTermsVersion: TERMS_VERSION });
+
+		expect((await login(fixture.member.email, PASSWORD)).mustAcceptTerms).toBe(false);
+	});
+
+	it('is returned by changePassword', async () => {
+		const fixture = await makeAccount();
+		await seedAgreement();
+
+		const session = await changePassword(fixture.authFor(fixture.admin), {
+			currentPassword: PASSWORD,
+			newPassword: 'brand-new-password',
+		});
+
+		expect(session.mustAcceptTerms).toBe(true);
+	});
 });
 
 describe('userService.login', () => {
@@ -125,8 +217,11 @@ describe('userService.login', () => {
 		const disabled = login(fixture.disabledUsers[0].email, PASSWORD);
 		const wrong = login(fixture.admin.email, 'wrong-password');
 
-		await expect(disabled).rejects.toMatchObject({ message: 'Invalid email or password', statusCode: 401 });
-		await expect(wrong).rejects.toMatchObject({ message: 'Invalid email or password', statusCode: 401 });
+		// Awaited together: awaiting one first leaves the other's rejection unhandled.
+		await Promise.all([
+			expect(disabled).rejects.toMatchObject({ message: 'Invalid email or password', statusCode: 401 }),
+			expect(wrong).rejects.toMatchObject({ message: 'Invalid email or password', statusCode: 401 }),
+		]);
 	});
 
 	it('rejects an unknown email', async () => {

@@ -1,0 +1,32 @@
+FIRST-FRAME TERMS OF SERVICE
+
+Effective November 20, 2026
+
+These Terms of Service ("Terms") govern your organization's use of First-Frame
+("the Service"). By creating an account or continuing to use the Service, you
+agree to these Terms on behalf of your organization.
+
+1. ACCOUNTS
+   1.1 The person who creates an account is its administrator and is
+       responsible for the users they add.
+   1.2 Keep your login details confidential.
+
+2. PURCHASES AND CASES
+   2.1 Creating a case is a purchase. Fees are not refundable except
+       as required by law.
+   2.2 Cases are archived automatically seven days after purchase.
+
+3. YOUR DATA
+   3.1 You own the data you enter.
+   3.2 Student details are deleted when a case is archived.
+
+4. ACCEPTABLE USE
+   You agree not to misuse the Service, attempt to access other accounts,
+   or interfere with its operation.
+
+5. CHANGES TO THESE TERMS
+   We may update these Terms. An account administrator must accept the
+   updated Terms before your organization can continue using the Service.
+
+6. CONTACT
+   Questions about these Terms: support@example.com

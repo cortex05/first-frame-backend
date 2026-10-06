@@ -2,7 +2,7 @@ import request from 'supertest';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import app from '../../src/app.js';
-import { initModels, resetDb } from '../helpers/fixtures.js';
+import { TERMS_VERSION, initModels, resetDb, seedAgreement } from '../helpers/fixtures.js';
 
 const bearer = (token) => ({ Authorization: `Bearer ${token}` });
 
@@ -12,6 +12,7 @@ const register = async (suffix) => {
 		username: `admin-${suffix}`,
 		email: `admin-${suffix}@example.com`,
 		password: 'admin-pass',
+		termsVersion: TERMS_VERSION,
 	});
 	expect(res.status).toBe(201);
 	return res.body.data;
@@ -42,6 +43,7 @@ const detailsUrl = (caseId, number) => `/api/cases/${caseId}/students/${number}/
 beforeAll(async () => {
 	await initModels();
 	await resetDb();
+	await seedAgreement();
 });
 
 describe('student details end to end', () => {

@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import app from '../../src/app.js';
 import { runAutoArchive } from '../../src/jobs/autoArchiveExpiredCases.js';
-import { initModels, resetDb } from '../helpers/fixtures.js';
+import { TERMS_VERSION, initModels, resetDb, seedAgreement } from '../helpers/fixtures.js';
 
 const bearer = (token) => ({ Authorization: `Bearer ${token}` });
 
@@ -13,6 +13,7 @@ const register = async (suffix) => {
 		username: `admin-${suffix}`,
 		email: `admin-${suffix}@example.com`,
 		password: 'admin-pass',
+		termsVersion: TERMS_VERSION,
 	});
 	expect(res.status).toBe(201);
 	return res.body.data;
@@ -41,6 +42,7 @@ const addMember = async (adminToken, suffix) => {
 beforeAll(async () => {
 	await initModels();
 	await resetDb();
+	await seedAgreement();
 });
 
 describe('transactions end to end', () => {

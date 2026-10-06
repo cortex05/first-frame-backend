@@ -4,6 +4,13 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { createAppError, isDuplicateKeyError } from "../utils/error.js";
 import { withTransaction } from "../utils/transaction.js";
+import { isAccountAdmin } from "../policies/accountScope.js";
+import {
+  assertCurrentVersion,
+  getCurrentAgreement,
+  isAccountCurrent,
+  recordAcceptance,
+} from "./agreementService.js";
 
 const MIN_PASSWORD_LENGTH = 8;
 const MAX_ACCOUNT_NAME_LENGTH = 80;
@@ -25,8 +32,10 @@ export const hashPassword = (password) => bcrypt.hash(password, 10);
  * What the client keeps as its session. isAdmin (platform) and role (account)
  * are returned so the client can show or hide UI; neither authorizes anything --
  * the server re-reads both from the database on every request.
+ *
+ * `currentAgreement` decides mustAcceptTerms; without it the flag is false.
  */
-export const buildSessionPayload = (user, account) => {
+export const buildSessionPayload = (user, account, currentAgreement = null) => {
   const token = jwt.sign(
     { id: user._id, isAdmin: user.isAdmin },
     process.env.JWT_SECRET,
@@ -42,6 +51,7 @@ export const buildSessionPayload = (user, account) => {
     accountName: account.name,
     role: user.role,
     mustChangePassword: user.mustChangePassword,
+    mustAcceptTerms: !isAccountCurrent(account, currentAgreement),
   };
 };
 
@@ -51,10 +61,13 @@ export const buildSessionPayload = (user, account) => {
  * cannot reach the documents. Platform admin is still granted only by
  * `scripts/grantAdmin.js`.
  *
- * Runs in a transaction so a failed user insert (e.g. duplicate email) leaves
- * no orphan account behind.
+ * The registrant must have accepted the current Terms of Service
+ * (`termsVersion`); the acceptance is recorded with the account.
+ *
+ * Runs in a transaction so a failed insert (e.g. duplicate email) leaves no
+ * orphan account or acceptance behind.
  */
-export const register = async ({ accountName, username, email, password } = {}) => {
+export const register = async ({ accountName, username, email, password, termsVersion } = {}) => {
   const normalizedEmail = normalizeEmail(email);
   const normalizedAccountName = typeof accountName === "string" ? accountName.trim() : "";
   const normalizedUsername = typeof username === "string" ? username.trim() : "";
@@ -68,6 +81,8 @@ export const register = async ({ accountName, username, email, password } = {}) 
   }
 
   validatePassword(password);
+
+  const currentAgreement = await assertCurrentVersion(termsVersion);
 
   const hashedPassword = await hashPassword(password);
 
@@ -90,10 +105,16 @@ export const register = async ({ accountName, username, email, password } = {}) 
       createdAccount.createdBy = createdUser._id;
       await createdAccount.save({ session });
 
+      await recordAcceptance(
+        { userId: createdUser._id, accountId: createdAccount._id, agreement: currentAgreement },
+        session
+      );
+      createdAccount.acceptedTermsVersion = currentAgreement.termsVersion;
+
       return { user: createdUser, account: createdAccount };
     });
 
-    return buildSessionPayload(user, account);
+    return buildSessionPayload(user, account, currentAgreement);
   } catch (error) {
     if (isDuplicateKeyError(error)) {
       throw createAppError("Email or username already in use", 409);
@@ -120,7 +141,7 @@ export const login = async (email, password) => {
     throw createAppError(INVALID_CREDENTIALS, 401);
   }
 
-  return buildSessionPayload(user, account);
+  return buildSessionPayload(user, account, await getCurrentAgreement());
 };
 
 /**
@@ -148,5 +169,38 @@ export const changePassword = async (auth, { currentPassword, newPassword } = {}
   await user.save();
 
   const account = await Account.findById(user.account);
-  return buildSessionPayload(user, account);
+  return buildSessionPayload(user, account, await getCurrentAgreement());
+};
+
+/**
+ * The one action allowed while the account has not accepted the current
+ * terms. Only an account admin can accept, on behalf of the whole account.
+ * Returns a fresh session with mustAcceptTerms cleared.
+ */
+export const acceptCurrentTerms = async (auth, { termsVersion } = {}) => {
+  if (!isAccountAdmin(auth)) {
+    throw createAppError("Only an account administrator can accept the terms", 403);
+  }
+
+  const currentAgreement = await assertCurrentVersion(termsVersion);
+
+  try {
+    await withTransaction((session) =>
+      recordAcceptance(
+        { userId: auth.userId, accountId: auth.accountId, agreement: currentAgreement },
+        session
+      )
+    );
+  } catch (error) {
+    // The same user accepting twice at once: the other request recorded it.
+    if (!isDuplicateKeyError(error)) {
+      throw error;
+    }
+  }
+
+  const [user, account] = await Promise.all([
+    User.findById(auth.userId),
+    Account.findById(auth.accountId),
+  ]);
+  return buildSessionPayload(user, account, currentAgreement);
 };

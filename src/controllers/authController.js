@@ -5,10 +5,11 @@ import {
 } from "../services/userService.js";
 
 export const register = async (req, res, next) => {
-  // Only these four fields are read: isAdmin, role and account in the body are
-  // ignored -- see userService.register.
-  const { accountName, username, email, password } = req.body;
-  const session = await registerUser({ accountName, username, email, password });
+  // Only these fields are read: isAdmin, role and account in the body are
+  // ignored -- see userService.register. termsVersion is the version of the
+  // Terms of Service the registrant accepted.
+  const { accountName, username, email, password, termsVersion } = req.body;
+  const session = await registerUser({ accountName, username, email, password, termsVersion });
 
   res.status(201).json({
     success: true,

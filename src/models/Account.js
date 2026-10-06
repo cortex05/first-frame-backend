@@ -28,6 +28,12 @@ const AccountSchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
+    // Last terms version any admin of this account accepted. A copy of the
+    // newest AgreementRecord, kept so the auth gate needs no extra query.
+    acceptedTermsVersion: {
+      type: String,
+      default: null,
+    },
   },
   {
     collection: 'accounts',

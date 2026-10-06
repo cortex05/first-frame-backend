@@ -2,13 +2,14 @@ import request from 'supertest';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import app from '../../src/app.js';
-import { initModels, resetDb } from '../helpers/fixtures.js';
+import { TERMS_VERSION, initModels, resetDb, seedAgreement } from '../helpers/fixtures.js';
 
 const bearer = (token) => ({ Authorization: `Bearer ${token}` });
 
 beforeAll(async () => {
 	await initModels();
 	await resetDb();
+	await seedAgreement();
 });
 
 describe('accounts end to end', () => {
@@ -19,6 +20,7 @@ describe('accounts end to end', () => {
 			username: 'founder',
 			email: 'founder@example.com',
 			password: 'founder-pass',
+			termsVersion: TERMS_VERSION,
 		});
 		expect(registered.status).toBe(201);
 		expect(registered.body.data).toMatchObject({ role: 'admin', accountName: 'Cortes Law' });
