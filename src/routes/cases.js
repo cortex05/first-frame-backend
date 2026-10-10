@@ -4,6 +4,8 @@ import {
   archiveCase,
   createCase,
   listCases,
+  saveQuestionAnswers,
+  saveSeating,
   setCaseOwners,
   setStudentDetails,
   startCase,
@@ -21,6 +23,10 @@ router.put('/:id/owners', authenticate, requireAccountAdmin, setCaseOwners);
 router.post('/:id/start', authenticate, startCase);
 // Admins and owners alike: details are viewer notes, not case settings.
 router.put('/:id/students/:number/details', authenticate, setStudentDetails);
+// Admins and owners alike. Each writes only its own part of the case, so two
+// people running the same case don't overwrite each other.
+router.put('/:id/questions/:questionId/answers', authenticate, saveQuestionAnswers);
+router.put('/:id/seating', authenticate, saveSeating);
 router.post('/:id/archive', authenticate, archiveCase);
 
 export default router;

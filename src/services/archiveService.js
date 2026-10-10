@@ -19,8 +19,9 @@ const SUMMARY_FIELDS =
  * Must run inside a transaction so the three commit together or not at all.
  */
 const archiveLiveCase = async (liveCase, { archivedBy, reason, auth }, session) => {
-  // Student details expire with the case (spec 005); never archive them.
-  const { _id, studentDetails, ...snapshot } = liveCase.toObject();
+  // Student details expire with the case (spec 005); never archive them. The
+  // revision only guards live edits.
+  const { _id, studentDetails, revision, ...snapshot } = liveCase.toObject();
 
   const [archived] = await ArchivedCase.create(
     [

@@ -5,6 +5,10 @@ import {
   setCaseOwners as setCaseOwnersService } from '../services/caseService.js';
 import { archiveCase as archiveCaseService } from '../services/archiveService.js';
 import { setStudentDetails as setStudentDetailsService } from '../services/studentDetailsService.js';
+import {
+  saveQuestionAnswers as saveQuestionAnswersService,
+  saveSeating as saveSeatingService,
+} from '../services/caseSessionService.js';
 import { markSessionStarted } from '../services/transactionService.js';
 
 export const listCases = async (req, res, next) => {
@@ -99,6 +103,39 @@ export const setStudentDetails = async (req, res, next) => {
 			success: true,
 			message: 'Student details updated successfully',
 			data: result,
+		});
+	} catch (error) {
+		next(error);
+	}
+};
+
+export const saveQuestionAnswers = async (req, res, next) => {
+	try {
+		const updatedCase = await saveQuestionAnswersService(
+			req.params.id,
+			req.params.questionId,
+			req.body,
+			req.auth
+		);
+
+		res.status(200).json({
+			success: true,
+			message: 'Answers saved successfully',
+			data: updatedCase,
+		});
+	} catch (error) {
+		next(error);
+	}
+};
+
+export const saveSeating = async (req, res, next) => {
+	try {
+		const updatedCase = await saveSeatingService(req.params.id, req.body, req.auth);
+
+		res.status(200).json({
+			success: true,
+			message: 'Seating saved successfully',
+			data: updatedCase,
 		});
 	} catch (error) {
 		next(error);

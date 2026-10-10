@@ -112,6 +112,11 @@ const CaseSchema = new Schema(
     // Keyed by String(student number), like answers[questionId]. Written only
     // through studentDetailsService; kept out of caseFields so it is not archived.
     studentDetails: { type: Map, of: StudentDetailsSchema, default: {} },
+    // Bumped by every write to a field the whole-case PUT also writes (the
+    // case itself, one question's answers, the seating). A whole-case save
+    // that sends an older revision is refused with 409 CASE_CONFLICT instead
+    // of overwriting someone else's work. Not archived.
+    revision: { type: Number, default: 0, min: 0 },
   },
   {
     collection: 'cases',

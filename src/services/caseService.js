@@ -11,6 +11,38 @@ import { assertActiveAccountUsers } from './accountUsers.js';
 import { buildDetailsPrune } from './studentDetailsService.js';
 import { openTransaction } from './transactionService.js';
 
+// Every write to a field the whole-case PUT also writes bumps the revision.
+export const BUMP_REVISION = { $inc: { revision: 1 } };
+
+export const caseConflictError = () =>
+  createAppError(
+    'Someone else changed this case, so your change was not saved. Review the latest version and try again.',
+    409,
+    'CASE_CONFLICT'
+  );
+
+/** 404 unless the caller can see the case. */
+export const assertCaseVisible = async (caseId, auth) => {
+  if (!(await Case.exists({ _id: caseId, ...caseScopeFilter(auth) }))) {
+    throw createAppError('Case not found', 404);
+  }
+};
+
+// The revision the client last read. Optional: a client that sends none
+// (older frontends) is not checked.
+const parseRevision = (revision) => {
+  if (revision === undefined || revision === null) {
+    return undefined;
+  }
+  if (!Number.isInteger(revision) || revision < 0) {
+    throw createAppError('revision must be a non-negative integer', 400);
+  }
+  return revision;
+};
+
+// Cases created before revisions existed have no field, which reads as 0.
+const revisionMatch = (revision) => (revision === 0 ? { $in: [0, null] } : revision);
+
 export const listCases = async (auth) => {
   const cases = await Case.find(caseScopeFilter(auth)).sort({ createdOn: -1 });
   return cases;
@@ -80,6 +112,13 @@ export const createCase = async (casePayload, auth) => {
   });
 };
 
+/**
+ * The whole-case save. Each field sent replaces the stored one, so when the
+ * payload carries `revision` the write only happens if nobody has changed the
+ * case since the client read it (409 CASE_CONFLICT otherwise). Answers and
+ * seating have their own targeted endpoints (caseSessionService) that merge
+ * instead of replacing.
+ */
 export const updateCase = async (caseId, casePayload, auth) => {
   assertValidObjectId(caseId, 'case id');
 
@@ -111,6 +150,8 @@ export const updateCase = async (caseId, casePayload, auth) => {
   if (!Object.keys(update).length) {
     throw createAppError('No updatable fields provided', 400);
   }
+
+  const expectedRevision = parseRevision(casePayload?.revision);
 
   if (update.clientName !== undefined) {
     if (typeof update.clientName !== 'string' || !update.clientName.trim()) {
@@ -153,23 +194,31 @@ export const updateCase = async (caseId, casePayload, auth) => {
     throw createAppError('questions must be an array', 400);
   }
 
-  const filter = { _id: caseId, ...caseScopeFilter(auth) };
+  const filter = {
+    _id: caseId,
+    ...caseScopeFilter(auth),
+    ...(expectedRevision !== undefined && { revision: revisionMatch(expectedRevision) }),
+  };
   const options = { returnDocument: 'after', runValidators: true };
 
   // Changing the class size drops the details of students who no longer
   // exist, read and written in one transaction so nothing slips in between.
   const updatedCase =
     update.studentNumber === undefined
-      ? await Case.findOneAndUpdate(filter, { $set: update }, options)
+      ? await Case.findOneAndUpdate(filter, { $set: update, ...BUMP_REVISION }, options)
       : await withTransaction(async (session) => {
           const prune = await buildDetailsPrune(caseId, auth, update.studentNumber, session);
           const changes = Object.keys(prune).length
-            ? { $set: update, $unset: prune }
-            : { $set: update };
+            ? { $set: update, $unset: prune, ...BUMP_REVISION }
+            : { $set: update, ...BUMP_REVISION };
           return Case.findOneAndUpdate(filter, changes, { ...options, session });
         });
 
   if (!updatedCase) {
+    if (expectedRevision !== undefined) {
+      await assertCaseVisible(caseId, auth);
+      throw caseConflictError();
+    }
     throw createAppError('Case not found', 404);
   }
 
