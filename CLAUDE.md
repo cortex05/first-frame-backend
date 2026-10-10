@@ -25,11 +25,11 @@ npm run terms:publish -- terms.txt 11-20-2026   # new Terms of Service version (
 
 `npm test` is a placeholder that exits 1 — use `test:unit` / `test:http`. There is no linter or build step. `migrate:case-category` predates accounts and is obsolete after the reset.
 
-Required `.env`: `PORT`, `NODE_ENV`, `MONGODB_URI`, `JWT_SECRET`, `JWT_EXPIRATION`. **`MONGODB_URI` must be a replica set** (Atlas is): archiving, registration and the last-admin guard use transactions, which a standalone `mongod` rejects.
+Required `.env`: `PORT`, `NODE_ENV`, `MONGODB_URI`, `JWT_SECRET`, `JWT_EXPIRATION`. Optional: `TRUST_PROXY_HOPS` (default 1). **`MONGODB_URI` must be a replica set** (Atlas is): archiving, registration and the last-admin guard use transactions, which a standalone `mongod` rejects.
 
 ## Architecture
 
-- **Entry:** `main.js` (loads env, connects DB via `db.js`, starts `server.js`) → `src/app.js` (cors → helmet → rate limiter → JSON body → routes → error handler). CORS is deliberately first so 429 responses still carry CORS headers.
+- **Entry:** `main.js` (loads env, connects DB via `db.js`, starts `server.js`) → `src/app.js` (cors → helmet → trust proxy → rate limiter → JSON body → routes → error handler). CORS is deliberately first so 429 responses still carry CORS headers. Limiters live in `src/middleware/rateLimiters.js`: the general `apiLimiter` counts signed-in users per user id (verified JWT) and everyone else per IP; `routes/auth.js` adds `credentialLimiter` (login, change-password; failed attempts only) and `registerLimiter`. `trust proxy` defaults to 1 hop (`TRUST_PROXY_HOPS`) so `req.ip` is the client's, not the host's load balancer.
 - **Routing:** everything is mounted under `/api` (`src/routes/index.js`); `/auth` is also mounted at the root for backward compatibility.
 - **Layering:** routes → controllers → services → models. Services take an `auth` context (not `req`), hold the validation/business logic, and throw `createAppError(message, statusCode, code?)` (`src/utils/error.js`); `errorHandler` turns that into `{ status, message, code? }`. `code` is only ever a string set by the API (e.g. `PASSWORD_CHANGE_REQUIRED`) — numeric driver codes like 11000 are never sent.
 - **Express 5 async errors:** rejected promises in handlers/middleware are forwarded to the error handler automatically (e.g. `authHandler` just `throw`s).

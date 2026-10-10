@@ -1,11 +1,11 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
 
 import router from "./routes/index.js";
 import authRouter from "./routes/auth.js";
 import errorhandler from "./middleware/errorHandler.js";
+import { apiLimiter } from "./middleware/rateLimiters.js";
 
 const app = express();
 
@@ -19,19 +19,15 @@ app.use(cors());
 
 app.use(helmet());
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  // Development runs through the same budget as real traffic, and a single
-  // screen can spend several requests loading and saving.
-  max: process.env.NODE_ENV === 'production' ? 100 : 1000,
-  // JSON so the client reads the reason off `data.message`, like every other
-  // error this API returns.
-  message: { message: "Too many requests from this IP, please try again later." },
-  standardHeaders: true,
-  legacyHeaders: false,
-})
+// Render (and any host behind a load balancer) puts the client's address in
+// X-Forwarded-For. Without this, req.ip is the proxy's, and every user would
+// share one rate-limit budget. TRUST_PROXY_HOPS is the number of proxies in
+// front of the app.
+app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? 1));
 
-app.use(limiter);
+// Signed-in users are limited per user; login and registration have their own
+// stricter limiters in routes/auth.js.
+app.use(apiLimiter);
 
 // Middleware
 app.use(express.json({ limit: '10mb'}));
