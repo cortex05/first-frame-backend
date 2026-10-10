@@ -19,7 +19,10 @@ npm run admin:grant -- someone@example.com [--revoke] | --list   # PLATFORM admi
 npm run reset:accounts -- --confirm                # one-off: drops users/cases/playlists (keeps recommended)
 npm run job:auto-archive     # scheduled job: archive cases a week after purchase
 npm run terms:publish -- terms.txt 11-20-2026   # new Terms of Service version (live at 00:00 UTC that day)
+npm run db:sync-indexes [-- --apply]             # dry run (or apply): match DB indexes to the schemas
 ```
+
+**Indexes:** Mongoose builds missing indexes on startup but never drops one, so after removing an index from a schema run `npm run db:sync-indexes` (dry run), then with `-- --apply`. It drops every index no schema declares, including hand-made ones, so read the dry run first. Don't add a single-field index on a field that already leads a compound index (e.g. `account`): the compound one serves those queries.
 
 **Scheduled jobs** live in `src/jobs/<name>.js` (logic, tested in `test/unit`) with a thin runner in `scripts/<name>.js` (env, DB connect, exit code) and an `npm run job:<name>` script. The scheduler only runs that command: a Render Cron Job now, EventBridge Scheduler → ECS task on AWS later. A runner exits 1 when any item fails so the scheduler flags the run.
 

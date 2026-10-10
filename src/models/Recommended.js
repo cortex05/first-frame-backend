@@ -18,7 +18,6 @@ const RecommendedSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
-      index: true,
     },
     // Globally unique: exactly one curated set per charge, so "the recommended
     // set for this case" is always a single, unambiguous document.

@@ -26,7 +26,7 @@ const userSchema = new mongoose.Schema({
     ref: 'Account',
     required: true,
     immutable: true,
-    index: true,
+    // Indexed through { account, role, status } below, which leads with it.
   },
   // Role inside the account. Account admins manage the account's users and
   // cases; this is unrelated to isAdmin below.

@@ -95,7 +95,9 @@ const caseFields = {
     ref: 'Account',
     required: true,
     immutable: true,
-    index: true,
+    // No single-field index: every query also filters or sorts on a second
+    // field, and the compound indexes below (and on ArchivedCase) lead with
+    // `account`, so they serve account-only lookups too.
   },
   // The account admin who created the case. Only admins create cases.
   createdBy: {

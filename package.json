@@ -13,7 +13,8 @@
     "test:http": "vitest run test/http",
     "reset:accounts": "node scripts/resetForAccounts.js",
     "job:auto-archive": "node scripts/autoArchive.js",
-    "terms:publish": "node scripts/publishTerms.js"
+    "terms:publish": "node scripts/publishTerms.js",
+    "db:sync-indexes": "node scripts/syncIndexes.js"
   },
   "type": "module",
   "author": "Daniel",

@@ -13,7 +13,7 @@ const PlaylistSchema = new mongoose.Schema(
       ref: 'Account',
       required: true,
       immutable: true,
-      index: true,
+      // Indexed through { account, title } below, which leads with it.
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
