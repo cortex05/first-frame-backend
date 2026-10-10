@@ -20,9 +20,10 @@ import { BUMP_REVISION, assertCaseVisible, caseConflictError } from './caseServi
  */
 
 /**
- * Replaces the answers to one question, and only that question. Also marks
- * the question as polled. Returns the whole updated case, so the client picks
- * up anything others have saved meanwhile.
+ * Replaces the answers to one question, and only that question, in
+ * `case.answers` (the only answer store, spec 010; having a key there is what
+ * makes the question "polled"). Returns the whole updated case, so the client
+ * picks up anything others have saved meanwhile.
  *
  * Refused with 409 CASE_CONFLICT when the question no longer exists (someone
  * removed it), and 400 when a student number is beyond the class size.
@@ -30,7 +31,7 @@ import { BUMP_REVISION, assertCaseVisible, caseConflictError } from './caseServi
 export const saveQuestionAnswers = async (caseId, questionId, body, auth) => {
   assertValidObjectId(caseId, 'case id');
   assertQuestionId(questionId);
-  const { answers, labels, maxStudent } = normalizeQuestionAnswers(body?.answers);
+  const { answers, maxStudent } = normalizeQuestionAnswers(body?.answers);
 
   const updatedCase = await Case.findOneAndUpdate(
     {
@@ -39,19 +40,8 @@ export const saveQuestionAnswers = async (caseId, questionId, body, auth) => {
       'questions.id': questionId,
       ...(maxStudent > 0 && { studentNumber: { $gte: maxStudent } }),
     },
-    {
-      $set: {
-        [`answers.${questionId}`]: answers,
-        'questions.$[question].answers': labels,
-        'questions.$[question].firstPoll': true,
-      },
-      ...BUMP_REVISION,
-    },
-    {
-      arrayFilters: [{ 'question.id': questionId }],
-      returnDocument: 'after',
-      runValidators: true,
-    }
+    { $set: { [`answers.${questionId}`]: answers }, ...BUMP_REVISION },
+    { returnDocument: 'after', runValidators: true }
   );
 
   if (!updatedCase) {

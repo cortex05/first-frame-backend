@@ -43,6 +43,11 @@ describe('running one case from two browsers', () => {
 		const list = await request(app).get('/api/cases').set(admin);
 		expect(list.body.data[0].answers).toEqual({ 'q-1': { 1: YES }, 'q-2': { 2: NO } });
 		expect(list.body.data[0].revision).toBe(2);
+		// case.answers is the only answer store (spec 010).
+		for (const question of list.body.data[0].questions) {
+			expect(question).not.toHaveProperty('answers');
+			expect(question).not.toHaveProperty('firstPoll');
+		}
 	});
 
 	it('saves seating without touching answers', async () => {

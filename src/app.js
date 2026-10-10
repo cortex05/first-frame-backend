@@ -30,7 +30,7 @@ app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? 1));
 app.use(apiLimiter);
 
 // The largest legitimate body is a whole case at the limits in src/types.js
-// (about 1.7 MB with typical labels); 4 MB leaves headroom. Anything bigger is
+// (about 1.2 MB with typical labels); 4 MB leaves headroom. Anything bigger is
 // refused with 413 before it reaches a service. The API takes no form posts,
 // so urlencoded keeps its 100 KB default.
 app.use(express.json({ limit: '4mb' }));

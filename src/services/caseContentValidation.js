@@ -57,8 +57,7 @@ const normalizeAnswer = (answer) => {
 
 /**
  * Validates one question's answers, `{ [studentNumber]: { label, value } }`.
- * Returns the answers, the same answers as the string labels kept on the
- * question, and the highest student number (0 when empty).
+ * Returns the answers and the highest student number (0 when empty).
  */
 export const normalizeQuestionAnswers = (answers) => {
   if (!isPlainObject(answers)) {
@@ -66,16 +65,14 @@ export const normalizeQuestionAnswers = (answers) => {
   }
 
   const normalized = {};
-  const labels = {};
   let maxStudent = 0;
 
   for (const [key, answer] of Object.entries(answers)) {
     maxStudent = Math.max(maxStudent, parseStudentKey(key));
     normalized[key] = normalizeAnswer(answer);
-    labels[key] = String(normalized[key].label);
   }
 
-  return { answers: normalized, labels, maxStudent };
+  return { answers: normalized, maxStudent };
 };
 
 /** The whole-case `answers`: `{ [questionId]: <one question's answers> }`. */

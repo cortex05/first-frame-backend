@@ -14,7 +14,8 @@
     "reset:accounts": "node scripts/resetForAccounts.js",
     "job:auto-archive": "node scripts/autoArchive.js",
     "terms:publish": "node scripts/publishTerms.js",
-    "db:sync-indexes": "node scripts/syncIndexes.js"
+    "db:sync-indexes": "node scripts/syncIndexes.js",
+    "migrate:question-fields": "node scripts/migrateQuestionFields.js"
   },
   "type": "module",
   "author": "Daniel",

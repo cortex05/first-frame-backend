@@ -34,20 +34,10 @@ const fullCasePayload = () => {
 	for (let q = 0; q < QUESTIONS_MAX; q += 1) {
 		const id = randomUUID();
 		const questionAnswers = {};
-		const labels = {};
 		for (let student = 1; student <= CASE_STUDENTS_MAX; student += 1) {
-			const option = OPTIONS[(student + q) % OPTIONS.length];
-			questionAnswers[student] = option;
-			labels[student] = option.label;
+			questionAnswers[student] = OPTIONS[(student + q) % OPTIONS.length];
 		}
-		questions.push({
-			id,
-			text: 'x'.repeat(150),
-			type: 'MULTIPLE_CHOICE',
-			options: OPTIONS,
-			answers: labels,
-			firstPoll: true,
-		});
+		questions.push({ id, text: 'x'.repeat(150), type: 'MULTIPLE_CHOICE', options: OPTIONS });
 		answers[id] = questionAnswers;
 	}
 

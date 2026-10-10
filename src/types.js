@@ -14,7 +14,7 @@ export const STUDENT_RACE_MAX = 50;
 // Size limits for case content. They bound how large a case (and so its
 // permanent archive) can grow, whatever a client sends. Set well above real
 // use: a full case at these maxima with typical option labels serializes to
-// about 1.7 MB, and the JSON body limit in src/app.js (4 MB) leaves room for
+// about 1.2 MB, and the JSON body limit in src/app.js (4 MB) leaves room for
 // longer labels. The frontend has no matching inputs; the server's 400
 // message is shown if one is ever reached.
 export const CASE_STUDENTS_MAX = 300;

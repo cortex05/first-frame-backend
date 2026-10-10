@@ -20,16 +20,15 @@ const YES = { label: true, value: 2 };
 const NO = { label: false, value: 0 };
 
 describe('caseSessionService.normalizeQuestionAnswers', () => {
-	it('keeps label and value, derives string labels, and finds the highest student', () => {
+	it('keeps label and value and finds the highest student', () => {
 		expect(normalizeQuestionAnswers({ 1: { ...YES, extra: 'x' }, 3: { label: 'Maybe', value: 1 } })).toEqual({
 			answers: { 1: YES, 3: { label: 'Maybe', value: 1 } },
-			labels: { 1: 'true', 3: 'Maybe' },
 			maxStudent: 3,
 		});
 	});
 
 	it('accepts an empty object (clears the question)', () => {
-		expect(normalizeQuestionAnswers({})).toEqual({ answers: {}, labels: {}, maxStudent: 0 });
+		expect(normalizeQuestionAnswers({})).toEqual({ answers: {}, maxStudent: 0 });
 	});
 
 	it.each([
@@ -62,11 +61,16 @@ describe('caseSessionService.saveQuestionAnswers', () => {
 		);
 
 		expect(saved.answers).toEqual({ 'q-1': { 1: YES, 2: NO }, 'q-2': { 1: NO } });
-		const [q1, q2] = saved.toJSON().questions;
-		expect(q1.answers).toEqual({ 1: 'true', 2: 'false' });
-		expect(q1.firstPoll).toBe(true);
-		expect(q2.firstPoll).toBe(false);
 		expect(saved.revision).toBe(1);
+
+		// case.answers is the only answer store (spec 010): the questions
+		// themselves are left exactly as they were.
+		const raw = await Case.collection.findOne({ _id: live._id });
+		expect(raw.questions).toEqual(live.toObject().questions);
+		for (const question of raw.questions) {
+			expect(question).not.toHaveProperty('answers');
+			expect(question).not.toHaveProperty('firstPoll');
+		}
 	});
 
 	it('keeps both of two concurrent saves to different questions', async () => {

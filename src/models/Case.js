@@ -31,25 +31,24 @@ const OptionSchema = new Schema(
   { _id: false }
 );
 
+/**
+ * One question, the same shape on a case, a playlist and a recommended set.
+ * Answers are not stored here: a case keeps them only in `case.answers`
+ * (spec 010). Documents written before that may still carry `answers`,
+ * `firstPoll` and `caseId` on their questions until
+ * `npm run migrate:question-fields` runs (archives keep them for good);
+ * nothing reads them.
+ */
 const QuestionSchema = new Schema(
   {
     id: { type: String, required: true, trim: true, maxlength: ID_MAX },
     text: { type: String, required: true, trim: true, maxlength: QUESTION_TEXT_MAX },
     type: { type: String, enum: QUESTION_TYPES, required: true },
-    caseId: { type: String, default: null, maxlength: ID_MAX },
     options: {
       type: [OptionSchema],
       default: [],
       validate: maxItems(QUESTION_OPTIONS_MAX, 'a question'),
     },
-    // Answer labels by student number; one per student at most.
-    answers: {
-      type: Map,
-      of: { type: String, maxlength: LABEL_MAX },
-      default: {},
-      validate: maxItems(CASE_STUDENTS_MAX, 'question answers'),
-    },
-    firstPoll: { type: Boolean, default: false },
   },
   { _id: false }
 );
@@ -138,7 +137,9 @@ const caseFields = {
     validate: maxItems(QUESTIONS_MAX, 'questions'),
   },
   chartData: { type: Schema.Types.Mixed, default: {} },
-  // { [questionId]: { [studentId]: answer } } -- what completeness is judged on.
+  // The case's only answer store: { [questionId]: { [studentNumber]: { label,
+  // value } } }. Completeness, scores and the archive report read it, and a
+  // question counts as polled when it has a key here (spec 010).
   answers: { type: Schema.Types.Mixed, default: {} },
   seated: { type: Boolean, default: false },
 };

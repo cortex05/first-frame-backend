@@ -344,3 +344,42 @@ describe('ArchivedCase.archivedBy', () => {
 		expect((await ArchivedCase.findById(archived._id).lean()).archivedBy).toBeNull();
 	});
 });
+
+describe('archived questions (spec 010)', () => {
+	it('archives questions without the old per-question answer fields', async () => {
+		const fixture = await makeAccount();
+		const live = await makeCase(fixture, { answers: answerAll() });
+
+		const archived = await archiveCase(live._id.toString(), fixture.authFor(fixture.admin));
+
+		const raw = await ArchivedCase.collection.findOne({ _id: archived._id });
+		for (const question of raw.questions) {
+			expect(Object.keys(question).sort()).toEqual(['id', 'options', 'text', 'type']);
+		}
+	});
+
+	it('still reads an archive written before, old fields and all', async () => {
+		const fixture = await makeAccount();
+		const { _id, studentDetails, ...snapshot } = (await makeCase(fixture, { answers: answerAll() })).toObject();
+		const oldQuestions = snapshot.questions.map((question) => ({
+			...question,
+			answers: { 'student-1': 'true' },
+			firstPoll: true,
+			caseId: String(_id),
+		}));
+		const { insertedId } = await ArchivedCase.collection.insertOne({
+			...snapshot,
+			questions: oldQuestions,
+			originalCaseId: _id,
+			archivedBy: fixture.admin._id,
+			archiveReason: 'manual',
+			archivedAt: new Date(),
+		});
+
+		const archived = await getArchivedCase(String(insertedId), fixture.authFor(fixture.admin));
+
+		// Returned as stored; the report reads only case.answers, which is intact.
+		expect(archived.answers).toEqual(answerAll());
+		expect(archived.toJSON().questions[0]).toMatchObject({ firstPoll: true });
+	});
+});
