@@ -1,6 +1,12 @@
 import mongoose from 'mongoose';
 import {
+  CASE_STUDENTS_MAX,
+  ID_MAX,
+  LABEL_MAX,
+  QUESTION_OPTIONS_MAX,
+  QUESTION_TEXT_MAX,
   QUESTION_TYPES,
+  QUESTIONS_MAX,
   STUDENT_AGE_MAX,
   STUDENT_AGE_MIN,
   STUDENT_GENDERS,
@@ -11,9 +17,15 @@ import { CASE_CATEGORY_IDS } from '../caseCategories.js';
 
 const { Schema } = mongoose;
 
+// An array-length validator. Mongoose runs it on save and on update $set.
+export const maxItems = (max, label) => ({
+  validator: (value) => (value?.length ?? value?.size ?? 0) <= max,
+  message: `${label} cannot have more than ${max} entries`,
+});
+
 const OptionSchema = new Schema(
   {
-    label: { type: String, required: true, trim: true },
+    label: { type: String, required: true, trim: true, maxlength: LABEL_MAX },
     value: { type: Number, required: true, trim: true },
   },
   { _id: false }
@@ -21,12 +33,22 @@ const OptionSchema = new Schema(
 
 const QuestionSchema = new Schema(
   {
-    id: { type: String, required: true, trim: true },
-    text: { type: String, required: true, trim: true },
+    id: { type: String, required: true, trim: true, maxlength: ID_MAX },
+    text: { type: String, required: true, trim: true, maxlength: QUESTION_TEXT_MAX },
     type: { type: String, enum: QUESTION_TYPES, required: true },
-    caseId: { type: String, default: null },
-    options: { type: [OptionSchema], default: [] },
-    answers: { type: Map, of: String, default: {} },
+    caseId: { type: String, default: null, maxlength: ID_MAX },
+    options: {
+      type: [OptionSchema],
+      default: [],
+      validate: maxItems(QUESTION_OPTIONS_MAX, 'a question'),
+    },
+    // Answer labels by student number; one per student at most.
+    answers: {
+      type: Map,
+      of: { type: String, maxlength: LABEL_MAX },
+      default: {},
+      validate: maxItems(CASE_STUDENTS_MAX, 'question answers'),
+    },
     firstPoll: { type: Boolean, default: false },
   },
   { _id: false }
@@ -35,7 +57,12 @@ const QuestionSchema = new Schema(
 const StudentSchema = new Schema(
   {
     number: { type: Number, required: true, min: 1 },
-    questionsAnswered: { type: [Schema.Types.Mixed], default: [] },
+    // Never filled by the current frontend; bounded so it can't grow freely.
+    questionsAnswered: {
+      type: [Schema.Types.Mixed],
+      default: [],
+      validate: maxItems(QUESTIONS_MAX, 'questionsAnswered'),
+    },
   },
   { _id: false }
 );
@@ -95,11 +122,19 @@ const caseFields = {
     trim: true,
   },
 
-  studentNumber: { type: Number, required: true, min: 1 },
+  studentNumber: { type: Number, required: true, min: 1, max: CASE_STUDENTS_MAX },
   createdOn: { type: Date, default: Date.now, immutable: true },
 
-  students: { type: [StudentSchema], default: [] },
-  questions: { type: [QuestionSchema], default: [] },
+  students: {
+    type: [StudentSchema],
+    default: [],
+    validate: maxItems(CASE_STUDENTS_MAX, 'students'),
+  },
+  questions: {
+    type: [QuestionSchema],
+    default: [],
+    validate: maxItems(QUESTIONS_MAX, 'questions'),
+  },
   chartData: { type: Schema.Types.Mixed, default: {} },
   // { [questionId]: { [studentId]: answer } } -- what completeness is judged on.
   answers: { type: Schema.Types.Mixed, default: {} },

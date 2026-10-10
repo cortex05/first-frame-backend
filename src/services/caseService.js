@@ -8,6 +8,11 @@ import {
 import { createAppError } from '../utils/error.js';
 import { withTransaction } from '../utils/transaction.js';
 import { assertActiveAccountUsers } from './accountUsers.js';
+import {
+  assertChartData,
+  normalizeCaseAnswers,
+  normalizeSeatedStudents,
+} from './caseContentValidation.js';
 import { buildDetailsPrune } from './studentDetailsService.js';
 import { openTransaction } from './transactionService.js';
 
@@ -186,12 +191,22 @@ export const updateCase = async (caseId, casePayload, auth) => {
     update.studentNumber = parsedStudentNumber;
   }
 
-  if (update.students !== undefined && !Array.isArray(update.students)) {
-    throw createAppError('students must be an array', 400);
+  // The Mixed fields have no schema; their shape and size are checked here.
+  // `questions` is bounded by QuestionSchema's own validators.
+  if (update.students !== undefined) {
+    update.students = normalizeSeatedStudents(update.students).students;
   }
 
   if (update.questions !== undefined && !Array.isArray(update.questions)) {
     throw createAppError('questions must be an array', 400);
+  }
+
+  if (update.answers !== undefined) {
+    update.answers = normalizeCaseAnswers(update.answers);
+  }
+
+  if (update.chartData !== undefined) {
+    assertChartData(update.chartData);
   }
 
   const filter = {

@@ -3,11 +3,8 @@ import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import ArchivedCase from '../../src/models/ArchivedCase.js';
 import Case from '../../src/models/Case.js';
 import { archiveCase } from '../../src/services/archiveService.js';
-import {
-	normalizeQuestionAnswers,
-	saveQuestionAnswers,
-	saveSeating,
-} from '../../src/services/caseSessionService.js';
+import { normalizeQuestionAnswers } from '../../src/services/caseContentValidation.js';
+import { saveQuestionAnswers, saveSeating } from '../../src/services/caseSessionService.js';
 import { updateCase } from '../../src/services/caseService.js';
 import { initModels, makeAccount, makeCase, resetDb } from '../helpers/fixtures.js';
 

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
-import { QuestionSchema } from './Case.js';
+import { QuestionSchema, maxItems } from './Case.js';
+import { QUESTIONS_MAX } from '../types.js';
 
 /**
  * A question set shared by everyone in an account. Any user in the account
@@ -30,6 +31,7 @@ const PlaylistSchema = new mongoose.Schema(
     questions: {
       type: [QuestionSchema],
       default: [],
+      validate: maxItems(QUESTIONS_MAX, 'questions'),
     },
   },
   {

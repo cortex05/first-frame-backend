@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
-import { QuestionSchema } from './Case.js';
+import { QuestionSchema, maxItems } from './Case.js';
+import { QUESTIONS_MAX } from '../types.js';
 // Side-effect import: registers the User model so populate('createdBy') resolves
 // wherever Recommended is used, not just where auth happens to have loaded it.
 import './User.js';
@@ -31,6 +32,7 @@ const RecommendedSchema = new mongoose.Schema(
     questions: {
       type: [QuestionSchema],
       default: [],
+      validate: maxItems(QUESTIONS_MAX, 'questions'),
     },
   },
   {
