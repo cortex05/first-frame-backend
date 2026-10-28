@@ -1,9 +1,17 @@
-import { CASE_STUDENTS_MAX, ID_MAX, LABEL_MAX, QUESTIONS_MAX } from '../types.js';
+import {
+  CASE_STUDENTS_MAX,
+  ID_MAX,
+  INDIVIDUAL_ROUND_MAX,
+  LABEL_MAX,
+  QUESTIONS_MAX,
+} from '../types.js';
 import { createAppError } from '../utils/error.js';
 
 /**
  * Validation for the case fields Mongoose stores as Mixed (`answers`,
- * `chartData`, `students[].questionsAnswered`) and so cannot check itself.
+ * `chartData`, `students[].questionsAnswered`) and so cannot check itself,
+ * plus the request shape of `individualRound` (whose values the schema also
+ * bounds).
  * Each bound comes from src/types.js, so whatever a client sends, a case (and
  * the archive copied from it) stays a known, modest size.
  *
@@ -32,10 +40,10 @@ export const assertQuestionId = (questionId) => {
 
 // Student numbers arrive as object keys: plain digits only ('1.5', '1e1',
 // '$x' do not count), which also keeps them safe inside an update path.
-const parseStudentKey = (key) => {
+const parseStudentKey = (key, what = 'answers') => {
   const number = /^\d+$/.test(key) ? Number(key) : NaN;
   if (!Number.isInteger(number) || number < 1 || number > CASE_STUDENTS_MAX) {
-    throw badRequest('answers must be keyed by student number');
+    throw badRequest(`${what} must be keyed by student number`);
   }
   return number;
 };
@@ -187,4 +195,34 @@ export const assertChartData = (chartData) => {
   if (seats > CASE_STUDENTS_MAX) {
     throw badRequest(`chartData cannot seat more than ${CASE_STUDENTS_MAX} students`);
   }
+};
+
+/**
+ * Validates the individual round, `{ [studentNumber]: points }`, where points
+ * is a whole number within +/- INDIVIDUAL_ROUND_MAX. Zeros are dropped, since
+ * a missing student counts as 0. Returns the entries and the highest student
+ * number (0 when empty).
+ */
+export const normalizeIndividualRound = (individualRound) => {
+  if (!isPlainObject(individualRound)) {
+    throw badRequest('individualRound must be an object keyed by student number');
+  }
+
+  const normalized = {};
+  let maxStudent = 0;
+
+  for (const [key, points] of Object.entries(individualRound)) {
+    const number = parseStudentKey(key, 'individualRound');
+    if (!Number.isInteger(points) || Math.abs(points) > INDIVIDUAL_ROUND_MAX) {
+      throw badRequest(
+        `individual points must be whole numbers between -${INDIVIDUAL_ROUND_MAX} and ${INDIVIDUAL_ROUND_MAX}`
+      );
+    }
+    if (points !== 0) {
+      normalized[String(number)] = points;
+      maxStudent = Math.max(maxStudent, number);
+    }
+  }
+
+  return { individualRound: normalized, maxStudent };
 };

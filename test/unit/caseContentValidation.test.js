@@ -4,12 +4,14 @@ import Playlist from '../../src/models/Playlist.js';
 import {
 	assertChartData,
 	normalizeCaseAnswers,
+	normalizeIndividualRound,
 	normalizeSeatedStudents,
 } from '../../src/services/caseContentValidation.js';
 import { createCase, updateCase } from '../../src/services/caseService.js';
 import {
 	CASE_STUDENTS_MAX,
 	ID_MAX,
+	INDIVIDUAL_ROUND_MAX,
 	LABEL_MAX,
 	QUESTION_OPTIONS_MAX,
 	QUESTION_TEXT_MAX,
@@ -98,6 +100,38 @@ describe('normalizeCaseAnswers', () => {
 		],
 	])('rejects %s', (_label, answers) => {
 		expect(() => normalizeCaseAnswers(answers)).toThrow(badRequest);
+	});
+});
+
+describe('normalizeIndividualRound', () => {
+	it('keeps whole numbers, drops zeros and finds the highest student', () => {
+		expect(normalizeIndividualRound({ 1: 2, 3: -1, 7: 0 })).toEqual({
+			individualRound: { 1: 2, 3: -1 },
+			maxStudent: 3,
+		});
+	});
+
+	it('accepts an empty object and the bounds themselves', () => {
+		expect(normalizeIndividualRound({})).toEqual({ individualRound: {}, maxStudent: 0 });
+		expect(
+			normalizeIndividualRound({ 1: INDIVIDUAL_ROUND_MAX, 2: -INDIVIDUAL_ROUND_MAX }).individualRound
+		).toEqual({ 1: INDIVIDUAL_ROUND_MAX, 2: -INDIVIDUAL_ROUND_MAX });
+	});
+
+	it.each([
+		['a missing body', undefined],
+		['null', null],
+		['an array', [1, 2]],
+		['a zero student key', { 0: 1 }],
+		['a decimal student key', { '1.5': 1 }],
+		['a $ key', { $x: 1 }],
+		['a student beyond the maximum', { [CASE_STUDENTS_MAX + 1]: 1 }],
+		['a decimal value', { 1: 1.5 }],
+		['a string value', { 1: '2' }],
+		['a value above the bound', { 1: INDIVIDUAL_ROUND_MAX + 1 }],
+		['a value below the bound', { 1: -INDIVIDUAL_ROUND_MAX - 1 }],
+	])('rejects %s with a 400', (_label, individualRound) => {
+		expect(() => normalizeIndividualRound(individualRound)).toThrow(badRequest);
 	});
 });
 

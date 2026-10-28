@@ -113,19 +113,26 @@ export const setStudentDetails = async (caseId, studentNumberParam, body, auth) 
   };
 };
 
+// The per-student maps (keyed by String(student number)) that a class shrink
+// prunes.
+const PER_STUDENT_MAPS = ['studentDetails', 'individualRound'];
+
 /**
- * `$unset` paths for the details of students above `studentNumber`, read from
- * the current case. Used by updateCase when the class shrinks.
+ * `$unset` paths for the details and individual points of students above
+ * `studentNumber`, read from the current case. Used by updateCase when the
+ * class shrinks.
  */
-export const buildDetailsPrune = async (caseId, auth, studentNumber, session) => {
+export const buildStudentPrune = async (caseId, auth, studentNumber, session) => {
   const current = await Case.findOne({ _id: caseId, ...caseScopeFilter(auth) })
-    .select('studentDetails')
+    .select(PER_STUDENT_MAPS.join(' '))
     .session(session);
 
   const prune = {};
-  for (const key of current?.studentDetails?.keys() ?? []) {
-    if (Number(key) > studentNumber) {
-      prune[`studentDetails.${key}`] = '';
+  for (const field of PER_STUDENT_MAPS) {
+    for (const key of current?.[field]?.keys() ?? []) {
+      if (Number(key) > studentNumber) {
+        prune[`${field}.${key}`] = '';
+      }
     }
   }
   return prune;

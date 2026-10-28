@@ -6,6 +6,7 @@ import {
 import { archiveCase as archiveCaseService } from '../services/archiveService.js';
 import { setStudentDetails as setStudentDetailsService } from '../services/studentDetailsService.js';
 import {
+  saveIndividualRound as saveIndividualRoundService,
   saveQuestionAnswers as saveQuestionAnswersService,
   saveSeating as saveSeatingService,
 } from '../services/caseSessionService.js';
@@ -135,6 +136,20 @@ export const saveSeating = async (req, res, next) => {
 		res.status(200).json({
 			success: true,
 			message: 'Seating saved successfully',
+			data: updatedCase,
+		});
+	} catch (error) {
+		next(error);
+	}
+};
+
+export const saveIndividualRound = async (req, res, next) => {
+	try {
+		const updatedCase = await saveIndividualRoundService(req.params.id, req.body, req.auth);
+
+		res.status(200).json({
+			success: true,
+			message: 'Individual round saved successfully',
 			data: updatedCase,
 		});
 	} catch (error) {

@@ -105,3 +105,43 @@ describe('running one case from two browsers', () => {
 		expect(responses.map((res) => res.status)).toEqual([404, 404]);
 	});
 });
+
+describe('PUT /api/cases/:id/individual-round (spec 019)', () => {
+	it('saves the map for an owner and returns it as a plain object', async () => {
+		const { id, owner } = await setup();
+
+		const res = await request(app)
+			.put(`/api/cases/${id}/individual-round`)
+			.set(owner)
+			.send({ individualRound: { 1: 2, 2: -1 } });
+
+		expect(res.status).toBe(200);
+		expect(res.body.data.individualRound).toEqual({ 1: 2, 2: -1 });
+		expect(res.body.data.revision).toBe(0);
+	});
+
+	it('400s a bad value', async () => {
+		const { id, admin } = await setup();
+
+		const res = await request(app)
+			.put(`/api/cases/${id}/individual-round`)
+			.set(admin)
+			.send({ individualRound: { 1: 1.5 } });
+
+		expect(res.status).toBe(400);
+	});
+
+	it('401s without a token and 404s another account', async () => {
+		const { id } = await setup();
+		const other = await makeAccount();
+
+		const anonymous = await request(app).put(`/api/cases/${id}/individual-round`).send({ individualRound: {} });
+		const outsider = await request(app)
+			.put(`/api/cases/${id}/individual-round`)
+			.set(bearer(tokenFor(other.admin, other.account)))
+			.send({ individualRound: {} });
+
+		expect(anonymous.status).toBe(401);
+		expect(outsider.status).toBe(404);
+	});
+});

@@ -2,11 +2,22 @@ import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import ArchivedCase from '../../src/models/ArchivedCase.js';
 import Case from '../../src/models/Case.js';
-import { archiveCase } from '../../src/services/archiveService.js';
+import { archiveCase, autoArchiveCase } from '../../src/services/archiveService.js';
 import { normalizeQuestionAnswers } from '../../src/services/caseContentValidation.js';
-import { saveQuestionAnswers, saveSeating } from '../../src/services/caseSessionService.js';
-import { updateCase } from '../../src/services/caseService.js';
-import { initModels, makeAccount, makeCase, resetDb } from '../helpers/fixtures.js';
+import {
+	saveIndividualRound,
+	saveQuestionAnswers,
+	saveSeating,
+} from '../../src/services/caseSessionService.js';
+import { createCase, updateCase } from '../../src/services/caseService.js';
+import {
+	STUDENT_DETAILS,
+	answerAll,
+	initModels,
+	makeAccount,
+	makeCase,
+	resetDb,
+} from '../helpers/fixtures.js';
 
 beforeAll(async () => {
 	await initModels();
@@ -279,5 +290,162 @@ describe('archiving and the revision', () => {
 
 		const archived = await ArchivedCase.findOne({ originalCaseId: live._id }).lean();
 		expect(archived).not.toHaveProperty('revision');
+	});
+});
+
+describe('caseSessionService.saveIndividualRound (spec 019)', () => {
+	it('replaces the whole map and returns the case', async () => {
+		const fixture = await makeAccount();
+		const live = await makeCase(fixture, { studentNumber: 3, individualRound: { 1: 3 } });
+
+		const saved = await saveIndividualRound(
+			live._id.toString(),
+			{ individualRound: { 2: -1, 3: 0 } },
+			fixture.authFor(fixture.admin)
+		);
+
+		expect(saved.toJSON().individualRound).toEqual({ 2: -1 });
+		const inDb = await Case.findById(live._id);
+		expect(inDb.toJSON().individualRound).toEqual({ 2: -1 });
+	});
+
+	it('clears the map with an empty object', async () => {
+		const fixture = await makeAccount();
+		const live = await makeCase(fixture, { individualRound: { 1: 3 } });
+
+		const saved = await saveIndividualRound(live._id.toString(), { individualRound: {} }, fixture.authFor(fixture.admin));
+
+		expect(saved.toJSON().individualRound).toEqual({});
+	});
+
+	it('leaves answers, seating, questions, details and the revision alone', async () => {
+		const fixture = await makeAccount();
+		const chartData = { rects: [{ id: 'r1', assignedStudents: [{ id: 1, x: 0, y: 0 }] }] };
+		const live = await makeCase(fixture, {
+			answers: { 'q-1': { 1: YES } },
+			chartData,
+			students: [{ number: 1 }],
+			studentDetails: STUDENT_DETAILS,
+			revision: 4,
+		});
+
+		const saved = await saveIndividualRound(
+			live._id.toString(),
+			{ individualRound: { 1: 2 } },
+			fixture.authFor(fixture.admin)
+		);
+
+		const json = saved.toJSON();
+		expect(json.answers).toEqual({ 'q-1': { 1: YES } });
+		expect(json.chartData).toEqual(chartData);
+		expect(json.students).toEqual([{ number: 1, questionsAnswered: [] }]);
+		expect(json.questions).toEqual(live.toJSON().questions);
+		expect(json.studentDetails).toEqual(STUDENT_DETAILS);
+		expect(json.revision).toBe(4);
+	});
+
+	it('lets a case owner save', async () => {
+		const fixture = await makeAccount({ members: 1 });
+		const live = await makeCase(fixture, { owners: [fixture.member._id] });
+
+		const saved = await saveIndividualRound(
+			live._id.toString(),
+			{ individualRound: { 1: 1 } },
+			fixture.authFor(fixture.member)
+		);
+
+		expect(saved.toJSON().individualRound).toEqual({ 1: 1 });
+	});
+
+	it('404s a member who does not own the case, and another account', async () => {
+		const fixture = await makeAccount({ members: 1 });
+		const other = await makeAccount();
+		const live = await makeCase(fixture);
+		const body = { individualRound: { 1: 1 } };
+
+		await expect(saveIndividualRound(live._id.toString(), body, fixture.authFor(fixture.member))).rejects.toMatchObject({
+			statusCode: 404,
+		});
+		await expect(saveIndividualRound(live._id.toString(), body, other.authFor(other.admin))).rejects.toMatchObject({
+			statusCode: 404,
+		});
+	});
+
+	it('refuses a student beyond the class size and a malformed body', async () => {
+		const fixture = await makeAccount();
+		const live = await makeCase(fixture, { studentNumber: 2 });
+		const auth = fixture.authFor(fixture.admin);
+
+		await expect(saveIndividualRound(live._id.toString(), { individualRound: { 3: 1 } }, auth)).rejects.toMatchObject({
+			statusCode: 400,
+		});
+		await expect(saveIndividualRound(live._id.toString(), {}, auth)).rejects.toMatchObject({ statusCode: 400 });
+	});
+
+	it('reads as an empty map on a case saved before the field existed', async () => {
+		const fixture = await makeAccount();
+		const live = await makeCase(fixture);
+		await Case.collection.updateOne({ _id: live._id }, { $unset: { individualRound: '' } });
+
+		const inDb = await Case.findById(live._id);
+		expect(inDb.toJSON().individualRound).toEqual({});
+	});
+});
+
+describe('individualRound outside its endpoint (spec 019)', () => {
+	it('is ignored when creating a case', async () => {
+		const fixture = await makeAccount();
+
+		const created = await createCase(
+			{
+				clientName: 'Client',
+				attorney: 'Attorney',
+				category: 'criminal.theft',
+				studentNumber: 2,
+				individualRound: { 1: 5 },
+			},
+			fixture.authFor(fixture.admin)
+		);
+
+		expect(created.toJSON().individualRound).toEqual({});
+	});
+
+	it('is ignored by the whole-case save', async () => {
+		const fixture = await makeAccount();
+		const live = await makeCase(fixture, { individualRound: { 1: 2 } });
+		const auth = fixture.authFor(fixture.admin);
+
+		await updateCase(live._id.toString(), { clientName: 'Renamed', individualRound: { 1: 9 } }, auth);
+		await expect(updateCase(live._id.toString(), { individualRound: {} }, auth)).rejects.toMatchObject({
+			statusCode: 400,
+		});
+
+		const inDb = await Case.findById(live._id);
+		expect(inDb.clientName).toBe('Renamed');
+		expect(inDb.toJSON().individualRound).toEqual({ 1: 2 });
+	});
+
+	it('loses the students above a lowered class size', async () => {
+		const fixture = await makeAccount();
+		const live = await makeCase(fixture, { studentNumber: 3, individualRound: { 1: 2, 3: -1 } });
+
+		await updateCase(live._id.toString(), { studentNumber: 2 }, fixture.authFor(fixture.admin));
+
+		const inDb = await Case.findById(live._id);
+		expect(inDb.toJSON().individualRound).toEqual({ 1: 2 });
+	});
+
+	it('is copied into the archive, manual and automatic', async () => {
+		const fixture = await makeAccount();
+		const manual = await makeCase(fixture, { answers: answerAll(), individualRound: { 1: 2, 2: -3 } });
+		const automatic = await makeCase(fixture, { individualRound: { 2: 4 } });
+
+		await archiveCase(manual._id.toString(), fixture.authFor(fixture.admin));
+		await autoArchiveCase(automatic._id);
+
+		const manualArchive = await ArchivedCase.findOne({ originalCaseId: manual._id });
+		const autoArchive = await ArchivedCase.findOne({ originalCaseId: automatic._id });
+		expect(manualArchive.toJSON().individualRound).toEqual({ 1: 2, 2: -3 });
+		expect(autoArchive.toJSON().individualRound).toEqual({ 2: 4 });
 	});
 });

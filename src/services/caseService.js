@@ -13,7 +13,7 @@ import {
   normalizeCaseAnswers,
   normalizeSeatedStudents,
 } from './caseContentValidation.js';
-import { buildDetailsPrune } from './studentDetailsService.js';
+import { buildStudentPrune } from './studentDetailsService.js';
 import { openTransaction } from './transactionService.js';
 
 // Every write to a field the whole-case PUT also writes bumps the revision.
@@ -131,7 +131,8 @@ export const updateCase = async (caseId, casePayload, auth) => {
   // a regular update. Owners change only through setCaseOwners (admin only).
   // studentDetails is left out on purpose: it is written only through
   // PUT /cases/:id/students/:number/details, so a stale whole-case save
-  // can't overwrite it.
+  // can't overwrite it. individualRound is left out for the same reason: it is
+  // written only through PUT /cases/:id/individual-round.
   const allowedFields = [
     'clientName',
     'attorney',
@@ -216,13 +217,13 @@ export const updateCase = async (caseId, casePayload, auth) => {
   };
   const options = { returnDocument: 'after', runValidators: true };
 
-  // Changing the class size drops the details of students who no longer
-  // exist, read and written in one transaction so nothing slips in between.
+  // Changing the class size drops the details and individual points of
+  // students who no longer exist, read and written in one transaction so nothing slips in between.
   const updatedCase =
     update.studentNumber === undefined
       ? await Case.findOneAndUpdate(filter, { $set: update, ...BUMP_REVISION }, options)
       : await withTransaction(async (session) => {
-          const prune = await buildDetailsPrune(caseId, auth, update.studentNumber, session);
+          const prune = await buildStudentPrune(caseId, auth, update.studentNumber, session);
           const changes = Object.keys(prune).length
             ? { $set: update, $unset: prune, ...BUMP_REVISION }
             : { $set: update, ...BUMP_REVISION };

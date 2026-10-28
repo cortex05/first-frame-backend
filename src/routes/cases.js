@@ -4,6 +4,7 @@ import {
   archiveCase,
   createCase,
   listCases,
+  saveIndividualRound,
   saveQuestionAnswers,
   saveSeating,
   setCaseOwners,
@@ -27,6 +28,7 @@ router.put('/:id/students/:number/details', authenticate, setStudentDetails);
 // people running the same case don't overwrite each other.
 router.put('/:id/questions/:questionId/answers', authenticate, saveQuestionAnswers);
 router.put('/:id/seating', authenticate, saveSeating);
+router.put('/:id/individual-round', authenticate, saveIndividualRound);
 router.post('/:id/archive', authenticate, archiveCase);
 
 export default router;

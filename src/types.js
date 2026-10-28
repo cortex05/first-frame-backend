@@ -11,6 +11,11 @@ export const STUDENT_AGE_MAX = 120;
 export const STUDENT_OCCUPATION_MAX = 100;
 export const STUDENT_RACE_MAX = 50;
 
+// Case.individualRound: the points added to or taken from one student outside
+// any question. Each value is a whole number within +/- this bound. The
+// frontend's src/types/ENUMS.js carries the same limit.
+export const INDIVIDUAL_ROUND_MAX = 1000;
+
 // Size limits for case content. They bound how large a case (and so its
 // permanent archive) can grow, whatever a client sends. Set well above real
 // use: a full case at these maxima with typical option labels serializes to

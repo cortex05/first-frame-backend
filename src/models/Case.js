@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import {
   CASE_STUDENTS_MAX,
   ID_MAX,
+  INDIVIDUAL_ROUND_MAX,
   LABEL_MAX,
   QUESTION_OPTIONS_MAX,
   QUESTION_TEXT_MAX,
@@ -141,6 +142,20 @@ const caseFields = {
   // value } } }. Completeness, scores and the archive report read it, and a
   // question counts as polled when it has a key here (spec 010).
   answers: { type: Schema.Types.Mixed, default: {} },
+  // Points given to or taken from a student outside any question, keyed by
+  // String(student number); 0 is not stored. Added to the question total
+  // before risk is banded, so it is archived along with the answers. Written
+  // only through PUT /cases/:id/individual-round.
+  individualRound: {
+    type: Map,
+    of: {
+      type: Number,
+      min: -INDIVIDUAL_ROUND_MAX,
+      max: INDIVIDUAL_ROUND_MAX,
+      validate: { validator: Number.isInteger, message: 'individual points must be a whole number' },
+    },
+    default: {},
+  },
   seated: { type: Boolean, default: false },
 };
 

@@ -4,14 +4,15 @@ import { createAppError } from '../utils/error.js';
 import {
   assertChartData,
   assertQuestionId,
+  normalizeIndividualRound,
   normalizeQuestionAnswers,
   normalizeSeatedStudents,
 } from './caseContentValidation.js';
 import { BUMP_REVISION, assertCaseVisible, caseConflictError } from './caseService.js';
 
 /**
- * The writes made while a case is being run: one question's answers, and the
- * seating chart. Each touches only its own fields, so two people working on
+ * The writes made while a case is being run: one question's answers, the
+ * seating chart, and the individual round. Each touches only its own fields, so two people working on
  * the same case at once (an account admin and an owner, say) never erase each
  * other's work the way two whole-case saves would.
  *
@@ -74,6 +75,34 @@ export const saveSeating = async (caseId, body, auth) => {
       ...(maxStudent > 0 && { studentNumber: { $gte: maxStudent } }),
     },
     { $set: { chartData, students: seated, seated: true }, ...BUMP_REVISION },
+    { returnDocument: 'after', runValidators: true }
+  );
+
+  if (!updatedCase) {
+    await assertCaseVisible(caseId, auth);
+    throw createAppError('student number is out of range for this case', 400);
+  }
+
+  return updatedCase;
+};
+
+/**
+ * Replaces the individual round, `{ [studentNumber]: points }`: the points
+ * each student gained or lost outside any question. Students left out count
+ * as 0. The whole-case PUT never writes this field, so the revision is left
+ * alone. Returns the whole updated case.
+ */
+export const saveIndividualRound = async (caseId, body, auth) => {
+  assertValidObjectId(caseId, 'case id');
+  const { individualRound, maxStudent } = normalizeIndividualRound(body?.individualRound);
+
+  const updatedCase = await Case.findOneAndUpdate(
+    {
+      _id: caseId,
+      ...caseScopeFilter(auth),
+      ...(maxStudent > 0 && { studentNumber: { $gte: maxStudent } }),
+    },
+    { $set: { individualRound } },
     { returnDocument: 'after', runValidators: true }
   );
 
