@@ -294,9 +294,9 @@ describe('archiving and the revision', () => {
 });
 
 describe('caseSessionService.saveIndividualRound (spec 019)', () => {
-	it('replaces the whole map and returns the case', async () => {
+	it('updates only the students sent, removes those sent as 0, and returns the case', async () => {
 		const fixture = await makeAccount();
-		const live = await makeCase(fixture, { studentNumber: 3, individualRound: { 1: 3 } });
+		const live = await makeCase(fixture, { studentNumber: 3, individualRound: { 1: 3, 3: 4 } });
 
 		const saved = await saveIndividualRound(
 			live._id.toString(),
@@ -304,18 +304,43 @@ describe('caseSessionService.saveIndividualRound (spec 019)', () => {
 			fixture.authFor(fixture.admin)
 		);
 
-		expect(saved.toJSON().individualRound).toEqual({ 2: -1 });
+		expect(saved.toJSON().individualRound).toEqual({ 1: 3, 2: -1 });
 		const inDb = await Case.findById(live._id);
-		expect(inDb.toJSON().individualRound).toEqual({ 2: -1 });
+		expect(inDb.toJSON().individualRound).toEqual({ 1: 3, 2: -1 });
 	});
 
-	it('clears the map with an empty object', async () => {
+	it('keeps both of two people saving different students', async () => {
+		const fixture = await makeAccount({ members: 1 });
+		const live = await makeCase(fixture, { studentNumber: 5, owners: [fixture.member._id] });
+		const id = live._id.toString();
+
+		await Promise.all([
+			saveIndividualRound(id, { individualRound: { 3: 2 } }, fixture.authFor(fixture.admin)),
+			saveIndividualRound(id, { individualRound: { 5: -1 } }, fixture.authFor(fixture.member)),
+		]);
+
+		const inDb = await Case.findById(live._id);
+		expect(inDb.toJSON().individualRound).toEqual({ 3: 2, 5: -1 });
+	});
+
+	it('returns the case unchanged for an empty object', async () => {
 		const fixture = await makeAccount();
 		const live = await makeCase(fixture, { individualRound: { 1: 3 } });
 
 		const saved = await saveIndividualRound(live._id.toString(), { individualRound: {} }, fixture.authFor(fixture.admin));
 
-		expect(saved.toJSON().individualRound).toEqual({});
+		expect(saved.toJSON().individualRound).toEqual({ 1: 3 });
+	});
+
+	it('lets a student above the class size be cleared, but not set', async () => {
+		const fixture = await makeAccount();
+		const live = await makeCase(fixture, { studentNumber: 2 });
+		await Case.collection.updateOne({ _id: live._id }, { $set: { 'individualRound.3': 4 } });
+		const auth = fixture.authFor(fixture.admin);
+
+		const saved = await saveIndividualRound(live._id.toString(), { individualRound: { 3: 0, 1: 1 } }, auth);
+
+		expect(saved.toJSON().individualRound).toEqual({ 1: 1 });
 	});
 
 	it('leaves answers, seating, questions, details and the revision alone', async () => {
@@ -369,6 +394,9 @@ describe('caseSessionService.saveIndividualRound (spec 019)', () => {
 		await expect(saveIndividualRound(live._id.toString(), body, other.authFor(other.admin))).rejects.toMatchObject({
 			statusCode: 404,
 		});
+		await expect(
+			saveIndividualRound(live._id.toString(), { individualRound: {} }, other.authFor(other.admin))
+		).rejects.toMatchObject({ statusCode: 404 });
 	});
 
 	it('refuses a student beyond the class size and a malformed body', async () => {

@@ -104,18 +104,20 @@ describe('normalizeCaseAnswers', () => {
 });
 
 describe('normalizeIndividualRound', () => {
-	it('keeps whole numbers, drops zeros and finds the highest student', () => {
+	it('splits into entries to set and zeros to unset, and finds the highest student set', () => {
 		expect(normalizeIndividualRound({ 1: 2, 3: -1, 7: 0 })).toEqual({
-			individualRound: { 1: 2, 3: -1 },
+			set: { 1: 2, 3: -1 },
+			unset: ['7'],
 			maxStudent: 3,
 		});
 	});
 
 	it('accepts an empty object and the bounds themselves', () => {
-		expect(normalizeIndividualRound({})).toEqual({ individualRound: {}, maxStudent: 0 });
-		expect(
-			normalizeIndividualRound({ 1: INDIVIDUAL_ROUND_MAX, 2: -INDIVIDUAL_ROUND_MAX }).individualRound
-		).toEqual({ 1: INDIVIDUAL_ROUND_MAX, 2: -INDIVIDUAL_ROUND_MAX });
+		expect(normalizeIndividualRound({})).toEqual({ set: {}, unset: [], maxStudent: 0 });
+		expect(normalizeIndividualRound({ 1: INDIVIDUAL_ROUND_MAX, 2: -INDIVIDUAL_ROUND_MAX }).set).toEqual({
+			1: INDIVIDUAL_ROUND_MAX,
+			2: -INDIVIDUAL_ROUND_MAX,
+		});
 	});
 
 	it.each([
@@ -124,6 +126,8 @@ describe('normalizeIndividualRound', () => {
 		['an array', [1, 2]],
 		['a zero student key', { 0: 1 }],
 		['a decimal student key', { '1.5': 1 }],
+		['a leading-zero student key', { '01': 1 }],
+		['two keys for one student', { 1: 5, '01': -3 }],
 		['a $ key', { $x: 1 }],
 		['a student beyond the maximum', { [CASE_STUDENTS_MAX + 1]: 1 }],
 		['a decimal value', { 1: 1.5 }],

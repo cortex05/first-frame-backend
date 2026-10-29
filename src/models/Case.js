@@ -145,7 +145,7 @@ const caseFields = {
   // Points given to or taken from a student outside any question, keyed by
   // String(student number); 0 is not stored. Added to the question total
   // before risk is banded, so it is archived along with the answers. Written
-  // only through PUT /cases/:id/individual-round.
+  // only through PUT /cases/:id/individual-round, one student at a time.
   individualRound: {
     type: Map,
     of: {

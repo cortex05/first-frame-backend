@@ -38,10 +38,11 @@ export const assertQuestionId = (questionId) => {
   }
 };
 
-// Student numbers arrive as object keys: plain digits only ('1.5', '1e1',
-// '$x' do not count), which also keeps them safe inside an update path.
+// Student numbers arrive as object keys: plain digits with no leading zero
+// ('1.5', '1e1', '$x', '01' do not count), so each student has exactly one
+// key and it is safe inside an update path.
 const parseStudentKey = (key, what = 'answers') => {
-  const number = /^\d+$/.test(key) ? Number(key) : NaN;
+  const number = /^[1-9]\d*$/.test(key) ? Number(key) : NaN;
   if (!Number.isInteger(number) || number < 1 || number > CASE_STUDENTS_MAX) {
     throw badRequest(`${what} must be keyed by student number`);
   }
@@ -198,17 +199,20 @@ export const assertChartData = (chartData) => {
 };
 
 /**
- * Validates the individual round, `{ [studentNumber]: points }`, where points
- * is a whole number within +/- INDIVIDUAL_ROUND_MAX. Zeros are dropped, since
- * a missing student counts as 0. Returns the entries and the highest student
- * number (0 when empty).
+ * Validates an individual-round change, `{ [studentNumber]: points }`: the new
+ * points of each student listed, a whole number within +/- INDIVIDUAL_ROUND_MAX.
+ * A missing student counts as 0, so 0 means "remove the entry". Returns the
+ * entries to set, the student keys to unset, and the highest student number
+ * being set (0 when none). Clearing a student is allowed at any number, so a
+ * class that has since shrunk can still drop its stale entries.
  */
 export const normalizeIndividualRound = (individualRound) => {
   if (!isPlainObject(individualRound)) {
     throw badRequest('individualRound must be an object keyed by student number');
   }
 
-  const normalized = {};
+  const set = {};
+  const unset = [];
   let maxStudent = 0;
 
   for (const [key, points] of Object.entries(individualRound)) {
@@ -218,11 +222,13 @@ export const normalizeIndividualRound = (individualRound) => {
         `individual points must be whole numbers between -${INDIVIDUAL_ROUND_MAX} and ${INDIVIDUAL_ROUND_MAX}`
       );
     }
-    if (points !== 0) {
-      normalized[String(number)] = points;
+    if (points === 0) {
+      unset.push(key);
+    } else {
+      set[key] = points;
       maxStudent = Math.max(maxStudent, number);
     }
   }
 
-  return { individualRound: normalized, maxStudent };
+  return { set, unset, maxStudent };
 };

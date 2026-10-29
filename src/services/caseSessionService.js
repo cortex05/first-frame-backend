@@ -87,22 +87,42 @@ export const saveSeating = async (caseId, body, auth) => {
 };
 
 /**
- * Replaces the individual round, `{ [studentNumber]: points }`: the points
- * each student gained or lost outside any question. Students left out count
- * as 0. The whole-case PUT never writes this field, so the revision is left
- * alone. Returns the whole updated case.
+ * Updates the individual round for the students listed, `{ [studentNumber]:
+ * points }`: the points each one gained or lost outside any question, with 0
+ * removing the entry. Students left out keep what they have, so two people
+ * running the same case only collide on a student they both changed (the last
+ * save wins for that student). The whole-case PUT never writes this field, so
+ * the revision is left alone. Returns the whole updated case.
  */
 export const saveIndividualRound = async (caseId, body, auth) => {
   assertValidObjectId(caseId, 'case id');
-  const { individualRound, maxStudent } = normalizeIndividualRound(body?.individualRound);
+  const { set, unset, maxStudent } = normalizeIndividualRound(body?.individualRound);
+
+  const filter = {
+    _id: caseId,
+    ...caseScopeFilter(auth),
+    ...(maxStudent > 0 && { studentNumber: { $gte: maxStudent } }),
+  };
+  const setPaths = Object.fromEntries(
+    Object.entries(set).map(([key, points]) => [`individualRound.${key}`, points])
+  );
+  const unsetPaths = Object.fromEntries(unset.map((key) => [`individualRound.${key}`, '']));
+
+  // Nothing to change: answer with the current case, like any other save.
+  if (!unset.length && !Object.keys(set).length) {
+    const current = await Case.findOne(filter);
+    if (!current) {
+      throw createAppError('Case not found', 404);
+    }
+    return current;
+  }
 
   const updatedCase = await Case.findOneAndUpdate(
+    filter,
     {
-      _id: caseId,
-      ...caseScopeFilter(auth),
-      ...(maxStudent > 0 && { studentNumber: { $gte: maxStudent } }),
+      ...(Object.keys(setPaths).length && { $set: setPaths }),
+      ...(unset.length && { $unset: unsetPaths }),
     },
-    { $set: { individualRound } },
     { returnDocument: 'after', runValidators: true }
   );
 
