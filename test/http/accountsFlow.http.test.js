@@ -126,3 +126,54 @@ describe('accounts end to end', () => {
 		expect(detail.body.data.answers['q-1']['1']).toEqual({ label: 'true', value: 5 });
 	});
 });
+
+describe('admin handoff over HTTP', () => {
+	it('refuses self-disable and handing off to an unfinished admin, then hands off', async () => {
+		const registered = await request(app).post('/api/auth/register').send({
+			accountName: 'Handoff Law',
+			username: 'outgoing',
+			email: 'outgoing@example.com',
+			password: 'outgoing-pass',
+			termsVersion: TERMS_VERSION,
+		});
+		expect(registered.status).toBe(201);
+		const { token: adminToken, userId: adminId } = registered.body.data;
+
+		const selfDisable = await request(app)
+			.patch(`/api/account/users/${adminId}`)
+			.set(bearer(adminToken))
+			.send({ status: 'disabled' });
+		expect(selfDisable.status).toBe(400);
+		expect(selfDisable.body.code).toBe('CANNOT_DISABLE_SELF');
+
+		// The new admin still has a temporary password, so they don't count yet.
+		const created = await request(app)
+			.post('/api/account/users')
+			.set(bearer(adminToken))
+			.send({ username: 'incoming', email: 'incoming@example.com', password: 'temporary1', role: 'admin' });
+		expect(created.status).toBe(201);
+
+		const tooEarly = await request(app)
+			.patch(`/api/account/users/${adminId}`)
+			.set(bearer(adminToken))
+			.send({ role: 'member' });
+		expect(tooEarly.status).toBe(409);
+		expect(tooEarly.body.code).toBe('LAST_ACCOUNT_ADMIN');
+
+		const firstLogin = await request(app)
+			.post('/api/auth/login')
+			.send({ email: 'incoming@example.com', password: 'temporary1' });
+		const changed = await request(app)
+			.post('/api/auth/change-password')
+			.set(bearer(firstLogin.body.data.token))
+			.send({ currentPassword: 'temporary1', newPassword: 'incoming-pass' });
+		expect(changed.status).toBe(200);
+
+		const handedOff = await request(app)
+			.patch(`/api/account/users/${adminId}`)
+			.set(bearer(adminToken))
+			.send({ role: 'member' });
+		expect(handedOff.status).toBe(200);
+		expect(handedOff.body.user.role).toBe('member');
+	});
+});

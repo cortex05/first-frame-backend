@@ -9,6 +9,12 @@ const MAX_ACCOUNT_NAME_LENGTH = 80;
 const ACCOUNT_FIELDS = '_id name status createdAt';
 const USER_FIELDS = '_id username email role status mustChangePassword createdAt';
 
+const LAST_ADMIN_MESSAGE =
+  'An account must keep at least one active administrator who has finished setting up their password';
+const LAST_ADMIN_CODE = 'LAST_ACCOUNT_ADMIN';
+const SELF_DISABLE_MESSAGE = 'You cannot disable your own account';
+const SELF_DISABLE_CODE = 'CANNOT_DISABLE_SELF';
+
 export const getAccount = async (auth) => {
   const account = await Account.findById(auth.accountId).select(ACCOUNT_FIELDS);
   if (!account) {
@@ -79,9 +85,11 @@ export const createAccountUser = async (auth, { username, email, password, role 
 };
 
 /**
- * Changes a user's role and/or status. An account must always keep at least
- * one active admin, so a change that would remove the last one is refused --
- * including an admin demoting or disabling themselves. The check and the write
+ * Changes a user's role and/or status. Admins can never disable themselves
+ * (another admin can). An account must always keep at least one active admin
+ * who has finished setting up their password -- one still on a temporary
+ * password can't act yet -- so a change that would remove the last one is
+ * refused, including an admin demoting themselves. The check and the write
  * share a transaction so two admins cannot demote each other at the same time.
  */
 export const updateAccountUser = async (auth, targetUserId, { role, status } = {}) => {
@@ -96,6 +104,9 @@ export const updateAccountUser = async (auth, targetUserId, { role, status } = {
   }
   if (status !== undefined && !USER_STATUSES.includes(status)) {
     throw createAppError(`status must be one of: ${USER_STATUSES.join(', ')}`, 400);
+  }
+  if (status === 'disabled' && String(targetUserId) === auth.userId) {
+    throw createAppError(SELF_DISABLE_MESSAGE, 400, SELF_DISABLE_CODE);
   }
 
   return withTransaction(async (session) => {
@@ -114,11 +125,12 @@ export const updateAccountUser = async (auth, targetUserId, { role, status } = {
         account: auth.accountId,
         role: 'admin',
         status: 'active',
+        mustChangePassword: false,
         _id: { $ne: target._id },
       }).session(session);
 
       if (otherActiveAdmins === 0) {
-        throw createAppError('An account must keep at least one active administrator', 409);
+        throw createAppError(LAST_ADMIN_MESSAGE, 409, LAST_ADMIN_CODE);
       }
 
       // Two admins demoting each other write different user documents, so

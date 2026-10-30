@@ -159,20 +159,97 @@ describe('accountService.updateAccountUser', () => {
 			await expect(
 				updateAccountUser(fixture.authFor(fixture.admin), fixture.admin._id.toString(), { role: 'member' })
 			).rejects.toMatchObject({
-				message: 'An account must keep at least one active administrator',
+				message:
+					'An account must keep at least one active administrator who has finished setting up their password',
 				statusCode: 409,
+				code: 'LAST_ACCOUNT_ADMIN',
 			});
 			expect((await User.findById(fixture.admin._id)).role).toBe('admin');
 		});
 
-		it('refuses to disable the only admin', async () => {
-			const fixture = await makeAccount();
+		it('refuses to disable the only finished admin', async () => {
+			const fixture = await makeAccount({ admins: 2 });
+			const [finished, pending] = fixture.admins;
+			await User.updateOne({ _id: pending._id }, { mustChangePassword: true });
+
+			await expect(
+				updateAccountUser(fixture.authFor(pending), finished._id.toString(), { status: 'disabled' })
+			).rejects.toMatchObject({ statusCode: 409, code: 'LAST_ACCOUNT_ADMIN' });
+			expect((await User.findById(finished._id)).status).toBe('active');
+		});
+
+		it('refuses to let an admin disable themselves, even with another admin', async () => {
+			const fixture = await makeAccount({ admins: 2 });
 
 			await expect(
 				updateAccountUser(fixture.authFor(fixture.admin), fixture.admin._id.toString(), {
 					status: 'disabled',
 				})
-			).rejects.toMatchObject({ statusCode: 409 });
+			).rejects.toMatchObject({
+				message: 'You cannot disable your own account',
+				statusCode: 400,
+				code: 'CANNOT_DISABLE_SELF',
+			});
+			expect((await User.findById(fixture.admin._id)).status).toBe('active');
+		});
+
+		it('refuses to demote and disable yourself in one request, writing nothing', async () => {
+			const fixture = await makeAccount({ admins: 2 });
+
+			await expect(
+				updateAccountUser(fixture.authFor(fixture.admin), fixture.admin._id.toString(), {
+					role: 'member',
+					status: 'disabled',
+				})
+			).rejects.toMatchObject({ statusCode: 400, code: 'CANNOT_DISABLE_SELF' });
+
+			const inDb = await User.findById(fixture.admin._id);
+			expect(inDb.role).toBe('admin');
+			expect(inDb.status).toBe('active');
+		});
+
+		it('accepts status active on yourself', async () => {
+			const fixture = await makeAccount();
+
+			const user = await updateAccountUser(fixture.authFor(fixture.admin), fixture.admin._id.toString(), {
+				status: 'active',
+			});
+
+			expect(user.status).toBe('active');
+		});
+
+		it('does not count an admin who still has a temporary password', async () => {
+			const fixture = await makeAccount({ admins: 2 });
+			await User.updateOne({ _id: fixture.admins[1]._id }, { mustChangePassword: true });
+
+			await expect(
+				updateAccountUser(fixture.authFor(fixture.admin), fixture.admin._id.toString(), { role: 'member' })
+			).rejects.toMatchObject({ statusCode: 409, code: 'LAST_ACCOUNT_ADMIN' });
+			expect((await User.findById(fixture.admin._id)).role).toBe('admin');
+		});
+
+		it('lets a finished admin demote a pending admin', async () => {
+			const fixture = await makeAccount({ admins: 2 });
+			const [finished, pending] = fixture.admins;
+			await User.updateOne({ _id: pending._id }, { mustChangePassword: true });
+
+			const demoted = await updateAccountUser(fixture.authFor(finished), pending._id.toString(), {
+				role: 'member',
+			});
+
+			expect(demoted.role).toBe('member');
+		});
+
+		it('lets an admin disable another admin while a finished admin remains', async () => {
+			const fixture = await makeAccount({ admins: 3 });
+			const [caller, pending, target] = fixture.admins;
+			await User.updateOne({ _id: pending._id }, { mustChangePassword: true });
+
+			const disabled = await updateAccountUser(fixture.authFor(caller), target._id.toString(), {
+				status: 'disabled',
+			});
+
+			expect(disabled.status).toBe('disabled');
 		});
 
 		it('does not count a disabled admin as a remaining admin', async () => {
