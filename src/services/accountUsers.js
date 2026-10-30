@@ -2,6 +2,28 @@ import mongoose from 'mongoose';
 import User from '../models/User.js';
 import { createAppError } from '../utils/error.js';
 
+export const ATTORNEY_INVALID_MESSAGE = 'attorneyId must be an active user of this account';
+
+/**
+ * Validates the user chosen as a case's attorney (spec 021): an active user of
+ * the given account. Returns `{ _id, username }`.
+ */
+export const assertActiveAccountUser = async (accountId, userId) => {
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    throw createAppError(ATTORNEY_INVALID_MESSAGE, 400);
+  }
+
+  const user = await User.findOne({ _id: userId, account: accountId, status: 'active' })
+    .select('_id username')
+    .lean();
+
+  if (!user) {
+    throw createAppError(ATTORNEY_INVALID_MESSAGE, 400);
+  }
+
+  return user;
+};
+
 /**
  * Validates a list of user ids that are about to be written onto a case
  * (its owners). Each must be an active user of the given account. Returns

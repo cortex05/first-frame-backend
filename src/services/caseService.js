@@ -7,7 +7,7 @@ import {
 } from '../policies/accountScope.js';
 import { createAppError } from '../utils/error.js';
 import { withTransaction } from '../utils/transaction.js';
-import { assertActiveAccountUsers } from './accountUsers.js';
+import { assertActiveAccountUser, assertActiveAccountUsers } from './accountUsers.js';
 import {
   assertChartData,
   normalizeCaseAnswers,
@@ -53,9 +53,18 @@ export const listCases = async (auth) => {
   return cases;
 };
 
+// The attorney first, then the other owners, each once (spec 021).
+const withAttorney = (attorneyId, owners) => [
+  ...new Set([String(attorneyId), ...owners.map(String)]),
+];
+
 /**
  * Only account admins create cases. `account` and `createdBy` come from the
  * caller; `owners` are the users the admin hands the case to.
+ *
+ * `attorneyId` (spec 021) is an active user of the account. The case stores
+ * their username as `attorney` and they are always an owner. Without it the
+ * legacy free-text `attorney` is used, until every client sends `attorneyId`.
  *
  * Creating a case is a purchase: the case and its Transaction are written in
  * one transaction. Everything is validated first, so a rejected request
@@ -67,6 +76,7 @@ export const createCase = async (casePayload, auth) => {
   const {
     clientName,
     attorney,
+    attorneyId,
     category,
     studentNumber,
     questions = [],
@@ -74,7 +84,12 @@ export const createCase = async (casePayload, auth) => {
     timezone,
   } = casePayload || {};
 
-  if (!clientName || !attorney || !category) {
+  const hasAttorneyId = attorneyId !== undefined && attorneyId !== null && attorneyId !== '';
+  const attorneyUser = hasAttorneyId
+    ? await assertActiveAccountUser(auth.accountId, attorneyId)
+    : null;
+
+  if (!clientName || (!attorneyUser && !attorney) || !category) {
     throw createAppError('clientName, attorney, and category are required', 400);
   }
 
@@ -93,6 +108,9 @@ export const createCase = async (casePayload, auth) => {
   }
 
   const validatedOwners = await assertActiveAccountUsers(auth.accountId, owners);
+  const finalOwners = attorneyUser
+    ? withAttorney(attorneyUser._id, validatedOwners)
+    : validatedOwners;
 
   return withTransaction(async (session) => {
     const [createdCase] = await Case.create(
@@ -100,9 +118,10 @@ export const createCase = async (casePayload, auth) => {
         {
           account: auth.accountId,
           createdBy: auth.userId,
-          owners: validatedOwners,
+          owners: finalOwners,
           clientName: String(clientName).trim(),
-          attorney: String(attorney).trim(),
+          attorney: attorneyUser ? attorneyUser.username : String(attorney).trim(),
+          ...(attorneyUser && { attorneyId: attorneyUser._id }),
           category: normalizedCategory,
           studentNumber: parsedStudentNumber,
           questions,
@@ -129,13 +148,13 @@ export const updateCase = async (caseId, casePayload, auth) => {
 
   // This whitelist is what keeps account, createdBy and owners out of reach of
   // a regular update. Owners change only through setCaseOwners (admin only).
+  // attorney and attorneyId are set once, at creation (spec 021).
   // studentDetails is left out on purpose: it is written only through
   // PUT /cases/:id/students/:number/details, so a stale whole-case save
   // can't overwrite it. individualRound is left out for the same reason: it is
   // written only through PUT /cases/:id/individual-round.
   const allowedFields = [
     'clientName',
-    'attorney',
     'category',
     'studentNumber',
     'students',
@@ -164,13 +183,6 @@ export const updateCase = async (caseId, casePayload, auth) => {
       throw createAppError('clientName must be a non-empty string', 400);
     }
     update.clientName = update.clientName.trim();
-  }
-
-  if (update.attorney !== undefined) {
-    if (typeof update.attorney !== 'string' || !update.attorney.trim()) {
-      throw createAppError('attorney must be a non-empty string', 400);
-    }
-    update.attorney = update.attorney.trim();
   }
 
   if (update.category !== undefined) {
@@ -241,16 +253,33 @@ export const updateCase = async (caseId, casePayload, auth) => {
   return updatedCase;
 };
 
-/** Replaces the owner list. Account admins only. */
+/**
+ * Replaces the owner list. Account admins only. The case's attorney (spec 021)
+ * stays an owner whatever the body says, and isn't revalidated, so the list
+ * can still be saved after the attorney has been disabled.
+ */
 export const setCaseOwners = async (caseId, owners, auth) => {
   assertAccountAdmin(auth);
   assertValidObjectId(caseId, 'case id');
 
   const validatedOwners = await assertActiveAccountUsers(auth.accountId, owners);
 
+  // attorneyId is immutable, so reading it first can't race a change to it.
+  const existing = await Case.findOne({ _id: caseId, ...caseScopeFilter(auth) })
+    .select('attorneyId')
+    .lean();
+
+  if (!existing) {
+    throw createAppError('Case not found', 404);
+  }
+
+  const finalOwners = existing.attorneyId
+    ? withAttorney(existing.attorneyId, validatedOwners)
+    : validatedOwners;
+
   const updatedCase = await Case.findOneAndUpdate(
     { _id: caseId, account: auth.accountId },
-    { $set: { owners: validatedOwners } },
+    { $set: { owners: finalOwners } },
     { returnDocument: 'after', runValidators: true }
   );
 

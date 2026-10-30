@@ -3,6 +3,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import Case from '../../src/models/Case.js';
 import Transaction from '../../src/models/Transaction.js';
+import User from '../../src/models/User.js';
+import { ATTORNEY_INVALID_MESSAGE } from '../../src/services/accountUsers.js';
 import { createCase, listCases, setCaseOwners, updateCase } from '../../src/services/caseService.js';
 import { STUDENT_DETAILS, initModels, makeAccount, makeCase, resetDb } from '../helpers/fixtures.js';
 
@@ -101,6 +103,88 @@ describe('caseService.createCase', () => {
 			message: 'clientName, attorney, and category are required',
 			statusCode: 400,
 		});
+	});
+});
+
+describe('caseService.createCase attorney (spec 021)', () => {
+	it('stores the attorney as a user, with their username, as the first owner', async () => {
+		const fixture = await makeAccount({ members: 2 });
+		const [attorney, other] = fixture.members;
+
+		const created = await createCase(
+			validPayload({
+				attorney: 'Someone Else',
+				attorneyId: attorney._id.toString(),
+				owners: [other._id.toString()],
+			}),
+			fixture.authFor(fixture.admin)
+		);
+
+		expect(created.attorneyId.toString()).toBe(attorney._id.toString());
+		expect(created.attorney).toBe(attorney.username);
+		expect(created.owners.map(String)).toEqual([attorney._id.toString(), other._id.toString()]);
+	});
+
+	it('needs no attorney text when attorneyId is sent', async () => {
+		const fixture = await makeAccount({ members: 1 });
+
+		const created = await createCase(
+			validPayload({ attorney: undefined, attorneyId: fixture.member._id.toString() }),
+			fixture.authFor(fixture.admin)
+		);
+
+		expect(created.attorney).toBe(fixture.member.username);
+	});
+
+	it('stores the attorney once when they are also sent as an owner', async () => {
+		const fixture = await makeAccount({ members: 1 });
+		const id = fixture.member._id.toString();
+
+		const created = await createCase(
+			validPayload({ attorneyId: id, owners: [id] }),
+			fixture.authFor(fixture.admin)
+		);
+
+		expect(created.owners.map(String)).toEqual([id]);
+	});
+
+	it('lets the admin pick themselves', async () => {
+		const fixture = await makeAccount();
+		const id = fixture.admin._id.toString();
+
+		const created = await createCase(validPayload({ attorneyId: id }), fixture.authFor(fixture.admin));
+
+		expect(created.attorneyId.toString()).toBe(id);
+		expect(created.owners.map(String)).toEqual([id]);
+	});
+
+	it('rejects an attorney who is not an active user of the account, writing nothing', async () => {
+		const fixture = await makeAccount({ disabled: 1 });
+		const other = await makeAccount();
+		const auth = fixture.authFor(fixture.admin);
+
+		for (const attorneyId of [
+			'not-an-id',
+			new mongoose.Types.ObjectId().toString(),
+			other.admin._id.toString(),
+			fixture.disabledUsers[0]._id.toString(),
+		]) {
+			await expect(createCase(validPayload({ attorneyId }), auth)).rejects.toMatchObject({
+				message: ATTORNEY_INVALID_MESSAGE,
+				statusCode: 400,
+			});
+		}
+		expect(await Case.countDocuments()).toBe(0);
+		expect(await Transaction.countDocuments()).toBe(0);
+	});
+
+	it('keeps the free-text attorney when no attorneyId is sent', async () => {
+		const fixture = await makeAccount();
+
+		const created = await createCase(validPayload(), fixture.authFor(fixture.admin));
+
+		expect(created.attorney).toBe('Alex Attorney');
+		expect(created.toObject()).not.toHaveProperty('attorneyId');
 	});
 });
 
@@ -213,7 +297,6 @@ describe('caseService.updateCase', () => {
 			created._id.toString(),
 			{
 				clientName: '  Updated Client  ',
-				attorney: '  Updated Attorney  ',
 				category: 'civil.personal-injury',
 				studentNumber: 5,
 				questions: [{ id: 'q-1', text: 'Updated question', type: 'TRUE_FALSE' }],
@@ -222,7 +305,6 @@ describe('caseService.updateCase', () => {
 		);
 
 		expect(updated.clientName).toBe('Updated Client');
-		expect(updated.attorney).toBe('Updated Attorney');
 		expect(updated.category).toBe('civil.personal-injury');
 		expect(updated.studentNumber).toBe(5);
 		expect(updated.questions).toHaveLength(1);
@@ -319,6 +401,31 @@ describe('caseService.updateCase', () => {
 	});
 });
 
+describe('caseService.updateCase attorney (spec 021)', () => {
+	it('ignores attorney in the body', async () => {
+		const fixture = await makeAccount();
+		const created = await makeCase(fixture);
+
+		const updated = await updateCase(
+			created._id.toString(),
+			{ clientName: 'Renamed', attorney: 'Someone Else' },
+			fixture.authFor(fixture.admin)
+		);
+
+		expect(updated.clientName).toBe('Renamed');
+		expect(updated.attorney).toBe('Attorney');
+	});
+
+	it('refuses an update whose only field is attorney', async () => {
+		const fixture = await makeAccount();
+		const created = await makeCase(fixture);
+
+		await expect(
+			updateCase(created._id.toString(), { attorney: 'x' }, fixture.authFor(fixture.admin))
+		).rejects.toMatchObject({ message: 'No updatable fields provided', statusCode: 400 });
+	});
+});
+
 describe('caseService.setCaseOwners', () => {
 	it('replaces the owner list', async () => {
 		const fixture = await makeAccount({ members: 2 });
@@ -356,6 +463,43 @@ describe('caseService.setCaseOwners', () => {
 		await expect(
 			setCaseOwners(new mongoose.Types.ObjectId().toString(), [], fixture.authFor(fixture.admin))
 		).rejects.toMatchObject({ statusCode: 404 });
+	});
+});
+
+describe('caseService.setCaseOwners attorney (spec 021)', () => {
+	it('keeps the attorney when the body leaves them out', async () => {
+		const fixture = await makeAccount({ members: 1 });
+		const attorneyId = fixture.member._id.toString();
+		const created = await makeCase(fixture, { attorneyId, owners: [attorneyId] });
+
+		const updated = await setCaseOwners(created._id.toString(), [], fixture.authFor(fixture.admin));
+
+		expect(updated.owners.map(String)).toEqual([attorneyId]);
+	});
+
+	it('stores the attorney once when the body includes them', async () => {
+		const fixture = await makeAccount({ members: 2 });
+		const [attorney, other] = fixture.members.map((m) => m._id.toString());
+		const created = await makeCase(fixture, { attorneyId: attorney, owners: [attorney] });
+
+		const updated = await setCaseOwners(
+			created._id.toString(),
+			[other, attorney],
+			fixture.authFor(fixture.admin)
+		);
+
+		expect(updated.owners.map(String)).toEqual([attorney, other]);
+	});
+
+	it('still saves after the attorney has been disabled', async () => {
+		const fixture = await makeAccount({ members: 2 });
+		const [attorney, other] = fixture.members.map((m) => m._id.toString());
+		const created = await makeCase(fixture, { attorneyId: attorney, owners: [attorney] });
+		await User.updateOne({ _id: attorney }, { status: 'disabled' });
+
+		const updated = await setCaseOwners(created._id.toString(), [other], fixture.authFor(fixture.admin));
+
+		expect(updated.owners.map(String)).toEqual([attorney, other]);
 	});
 });
 

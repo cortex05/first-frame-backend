@@ -56,6 +56,19 @@ describe('archiveService.archiveCase', () => {
 		expect(inDb.seated).toBe(true);
 	});
 
+	it('keeps the attorney user in the snapshot, immutably (spec 021)', async () => {
+		const fixture = await makeAccount({ members: 1 });
+		const attorneyId = fixture.member._id;
+		const live = await makeCase(fixture, { attorneyId, owners: [attorneyId], answers: answerAll() });
+
+		const archived = await archiveCase(live._id.toString(), fixture.authFor(fixture.admin));
+
+		expect(archived.attorneyId.toString()).toBe(attorneyId.toString());
+		const doc = await ArchivedCase.findById(archived._id);
+		doc.attorneyId = fixture.admin._id;
+		expect(doc.attorneyId.toString()).toBe(attorneyId.toString());
+	});
+
 	it('lets an admin archive a case they do not own', async () => {
 		const fixture = await makeAccount();
 		const live = await makeCase(fixture, { answers: answerAll() });

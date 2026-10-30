@@ -113,6 +113,16 @@ const caseFields = {
     default: [],
   },
   clientName: { type: String, required: true, trim: true },
+  // The account user chosen as attorney (spec 021). Also always in `owners`.
+  // Missing on cases created before 021, whose `attorney` is free text.
+  attorneyId: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    default: undefined,
+    immutable: true,
+  },
+  // Since spec 021 the server sets this to the attorney's username at
+  // creation. It is a display snapshot and isn't updated if the user is renamed.
   attorney: { type: String, required: true, trim: true },
 
   // Replaces the caseType/charge pair. One id encodes both, so an invalid
