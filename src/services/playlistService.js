@@ -9,6 +9,7 @@ import { createAppError, isDuplicateKeyError } from '../utils/error.js';
 const LIST_FIELDS = '_id title createdBy createdAt updatedAt';
 const DETAIL_FIELDS = '_id title createdBy questions createdAt updatedAt';
 const DUPLICATE_TITLE = 'Playlist title already exists in this account.';
+export const NOT_ADMIN = 'Only an account admin can change a playlist.';
 
 const validateTitle = (title) => {
   if (typeof title !== 'string' || !title.trim()) {
@@ -26,8 +27,8 @@ const validateQuestions = (questions) => {
 
 /**
  * Loads a playlist the caller may change. Another account's playlist is a 404;
- * a playlist in the caller's account that they neither created nor administer
- * is a 403 -- they can already see it, so there is nothing to hide.
+ * a playlist in the caller's account is a 403 unless they are an account admin
+ * (spec 022) -- they can already see it, so there is nothing to hide.
  */
 const findWritablePlaylist = async (playlistId, auth) => {
   assertValidObjectId(playlistId, 'playlist id');
@@ -37,7 +38,7 @@ const findWritablePlaylist = async (playlistId, auth) => {
     throw createAppError('Playlist not found.', 404);
   }
   if (!canWritePlaylist(auth, playlist)) {
-    throw createAppError('Only the playlist creator or an account admin can change it.', 403);
+    throw createAppError(NOT_ADMIN, 403);
   }
   return playlist;
 };

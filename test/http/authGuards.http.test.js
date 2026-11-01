@@ -100,10 +100,11 @@ describe('cross-account isolation', () => {
 			request(app).put(`/api/cases/${liveCase._id}/owners`).set(bearer(theirToken)).send({ owners: [] }),
 			request(app).get(`/api/archived-cases/${archived.body.data._id}`).set(bearer(theirToken)),
 			request(app).get(`/api/playlists/${playlist.body.playlist._id}`).set(bearer(theirToken)),
+			request(app).patch(`/api/playlists/${playlist.body.playlist._id}`).set(bearer(theirToken)).send({ title: 'x' }),
 			request(app).delete(`/api/playlists/${playlist.body.playlist._id}`).set(bearer(theirToken)),
 		]);
 
-		expect(responses.map((r) => r.status)).toEqual([404, 404, 404, 404, 404, 404]);
+		expect(responses.map((r) => r.status)).toEqual([404, 404, 404, 404, 404, 404, 404]);
 	});
 });
 

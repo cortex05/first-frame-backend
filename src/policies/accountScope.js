@@ -52,5 +52,6 @@ export const playlistScopeFilter = (auth) => ({ account: auth.accountId });
 // that); this filter keeps them inside the caller's account.
 export const transactionScopeFilter = (auth) => ({ account: auth.accountId });
 
-export const canWritePlaylist = (auth, playlist) =>
-  isAccountAdmin(auth) || String(playlist.createdBy) === auth.userId;
+// Only account admins change or delete playlists (spec 022). `createdBy` is
+// kept on the document for information only; it grants nothing.
+export const canWritePlaylist = (auth, playlist) => isAccountAdmin(auth);

@@ -6,6 +6,7 @@ import {
 	deletePlaylist,
 	getPlaylist,
 	listPlaylists,
+	NOT_ADMIN,
 	updatePlaylist,
 } from '../../src/services/playlistService.js';
 import { initModels, makeAccount, resetDb } from '../helpers/fixtures.js';
@@ -55,25 +56,76 @@ describe('playlistService', () => {
 		await expect(createPlaylist(other.authFor(other.admin), { title: 'Same' })).resolves.toBeTruthy();
 	});
 
-	it('lets the creator and an admin change a playlist, but not another member', async () => {
+	it('refuses members, including the creator (spec 022)', async () => {
 		const fixture = await makeAccount({ members: 2 });
 		const [creator, bystander] = fixture.members;
 		const playlist = await createPlaylist(fixture.authFor(creator), { title: 'Mine' });
 		const id = playlist._id.toString();
 
-		await expect(
-			updatePlaylist(id, fixture.authFor(bystander), { title: 'Hijacked' })
-		).rejects.toMatchObject({ statusCode: 403 });
-		await expect(deletePlaylist(id, fixture.authFor(bystander))).rejects.toMatchObject({ statusCode: 403 });
+		for (const user of [creator, bystander]) {
+			const auth = fixture.authFor(user);
+			await expect(updatePlaylist(id, auth, { title: 'Hijacked' })).rejects.toMatchObject({
+				statusCode: 403,
+				message: NOT_ADMIN,
+			});
+			await expect(updatePlaylist(id, auth, { questions: [] })).rejects.toMatchObject({
+				statusCode: 403,
+				message: NOT_ADMIN,
+			});
+			await expect(deletePlaylist(id, auth)).rejects.toMatchObject({ statusCode: 403, message: NOT_ADMIN });
+		}
 
-		const renamed = await updatePlaylist(id, fixture.authFor(creator), { title: 'Renamed' });
+		const stored = await Playlist.findById(id);
+		expect(stored.title).toBe('Mine');
+	});
+
+	it("lets an account admin rename, replace questions and delete a member's playlist", async () => {
+		const fixture = await makeAccount({ members: 1 });
+		const playlist = await createPlaylist(fixture.authFor(fixture.member), { title: 'Theirs' });
+		const id = playlist._id.toString();
+		const auth = fixture.authFor(fixture.admin);
+
+		const renamed = await updatePlaylist(id, auth, { title: 'Renamed' });
 		expect(renamed.title).toBe('Renamed');
 
-		const adminRenamed = await updatePlaylist(id, fixture.authFor(fixture.admin), { questions: [] });
-		expect(adminRenamed.title).toBe('Renamed');
+		const questions = [
+			{
+				id: 'q-tf',
+				text: 'Was there intent?',
+				type: 'TRUE_FALSE',
+				options: [
+					{ label: true, value: 3 },
+					{ label: false, value: 0 },
+				],
+			},
+			{
+				id: 'q-mc',
+				text: 'How credible?',
+				type: 'MULTIPLE_CHOICE',
+				options: [
+					{ label: 'Very', value: 2 },
+					{ label: 'Not', value: -1 },
+				],
+			},
+		];
+		const updated = await updatePlaylist(id, auth, { questions });
+		expect(updated.title).toBe('Renamed');
+		expect(updated.questions.map((q) => [q.id, q.type, q.options.map((o) => o.value)])).toEqual([
+			['q-tf', 'TRUE_FALSE', [3, 0]],
+			['q-mc', 'MULTIPLE_CHOICE', [2, -1]],
+		]);
 
-		await deletePlaylist(id, fixture.authFor(fixture.admin));
+		await deletePlaylist(id, auth);
 		expect(await Playlist.findById(id)).toBeNull();
+	});
+
+	it('allows renaming a playlist to its own title', async () => {
+		const fixture = await makeAccount();
+		const auth = fixture.authFor(fixture.admin);
+		const playlist = await createPlaylist(auth, { title: 'Same' });
+
+		const result = await updatePlaylist(playlist._id.toString(), auth, { title: 'Same' });
+		expect(result.title).toBe('Same');
 	});
 
 	it('returns 404 to another account on update and delete', async () => {

@@ -4,7 +4,7 @@ import { QUESTIONS_MAX } from '../types.js';
 
 /**
  * A question set shared by everyone in an account. Any user in the account
- * can create one; only its creator or an account admin can change it.
+ * can create one; only an account admin can change or delete it (spec 022).
  */
 const PlaylistSchema = new mongoose.Schema(
   {

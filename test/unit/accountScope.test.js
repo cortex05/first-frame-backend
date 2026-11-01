@@ -55,11 +55,11 @@ describe('playlistScopeFilter / canWritePlaylist', () => {
 		expect(playlistScopeFilter(member)).toEqual({ account: 'acc-1' });
 	});
 
-	it('lets the creator and admins write, and nobody else', () => {
+	it('lets only account admins write, not even the creator (spec 022)', () => {
 		const ownPlaylist = { createdBy: 'u-member' };
 		const othersPlaylist = { createdBy: 'u-someone' };
 
-		expect(canWritePlaylist(member, ownPlaylist)).toBe(true);
+		expect(canWritePlaylist(member, ownPlaylist)).toBe(false);
 		expect(canWritePlaylist(member, othersPlaylist)).toBe(false);
 		expect(canWritePlaylist(admin, othersPlaylist)).toBe(true);
 	});
